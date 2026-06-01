@@ -1,0 +1,46 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: deployhub-builder
+  namespace: deployhub-build
+  labels:
+    app: deployhub-builder
+spec:
+  replicas: 0 # KEDA scale-to-zero
+  selector:
+    matchLabels:
+      app: deployhub-builder
+  template:
+    metadata:
+      labels:
+        app: deployhub-builder
+    spec:
+      serviceAccountName: deployhub-builder-sa
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+        runAsNonRoot: true
+        runAsUser: 1000
+      containers:
+        - name: builder
+          image: deployhub-builder:latest
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            seccompProfile:
+              type: RuntimeDefault
+          resources:
+            requests:
+              cpu: "1000m"
+              memory: "2Gi"
+            limits:
+              cpu: "2000m"
+              memory: "4Gi"
+          env:
+            - name: REDIS_HOST
+              value: "redis-master.deployhub-system.svc.cluster.local"
+            - name: BUILDER_QUEUE
+              value: "builder_queue"

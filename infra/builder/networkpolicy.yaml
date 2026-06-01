@@ -1,0 +1,47 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: builder-strict-isolation
+  namespace: deployhub-build
+spec:
+  podSelector: {} # Applies to all pods in this namespace
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress: [] # Block all incoming traffic (no ingress allowed)
+  egress:
+    - ports:
+        - protocol: UDP
+          port: 53 # DNS
+        - protocol: TCP
+          port: 53
+    # Allow egress to Internet (GitHub, Container Registries, etc)
+    # Block internal Kubernetes CIDRs (e.g. 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16)
+    # Block AWS Metadata endpoint 169.254.169.254
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 10.0.0.0/8      # Typical Cluster VPC/Pod CIDR
+              - 172.16.0.0/12   # Typical Docker/Cluster CIDR
+              - 192.168.0.0/16  # Typical Cluster CIDR
+              - 169.254.169.254/32 # Cloud Metadata API
+      ports:
+        - protocol: TCP
+          port: 443
+        - protocol: TCP
+          port: 80
+        - protocol: TCP
+          port: 22 # Git over SSH
+    
+    # Exception for Redis Queue (Build Dependency) in deployhub-system
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: deployhub-system
+          podSelector:
+            matchLabels:
+              app: redis
+      ports:
+        - protocol: TCP
+          port: 6379

@@ -1,0 +1,62 @@
+apiVersion: karpenter.k8s.aws/v1beta1
+kind: EC2NodeClass
+metadata:
+  name: deployhub-default
+spec:
+  amiFamily: AL2
+  role: "KarpenterNodeRole-DeployHub"
+  subnetSelectorTerms:
+    - tags:
+        karpenter.sh/discovery: "DeployHub"
+  securityGroupSelectorTerms:
+    - tags:
+        karpenter.sh/discovery: "DeployHub"
+---
+apiVersion: karpenter.sh/v1beta1
+kind: NodePool
+metadata:
+  name: builder-pool
+spec:
+  template:
+    spec:
+      requirements:
+        - key: kubernetes.io/arch
+          operator: In
+          values: ["amd64", "arm64"]
+        - key: karpenter.sh/capacity-type
+          operator: In
+          values: ["spot", "on-demand"] # Spot preferred, on-demand fallback
+        - key: karpenter.k8s.aws/instance-category
+          operator: In
+          values: ["c", "m", "r"]
+      nodeClassRef:
+        name: deployhub-default
+      taints:
+        - key: deployhub.io/dedicated
+          value: builder
+          effect: NoSchedule
+  disruption:
+    consolidationPolicy: WhenUnderutilized
+    expireAfter: 720h # 30 Days
+---
+apiVersion: karpenter.sh/v1beta1
+kind: NodePool
+metadata:
+  name: tenant-pool
+spec:
+  template:
+    spec:
+      requirements:
+        - key: kubernetes.io/arch
+          operator: In
+          values: ["amd64", "arm64"]
+        - key: karpenter.sh/capacity-type
+          operator: In
+          values: ["on-demand"] # Tenants get stable on-demand nodes
+        - key: karpenter.k8s.aws/instance-category
+          operator: In
+          values: ["m", "t3"]
+      nodeClassRef:
+        name: deployhub-default
+  disruption:
+    consolidationPolicy: WhenUnderutilized

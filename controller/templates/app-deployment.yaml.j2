@@ -1,0 +1,93 @@
+apiVersion: external-secrets.io/v1beta1
+kind: ExternalSecret
+metadata:
+  name: {{ deployment_name }}-secrets
+  namespace: {{ namespace }}
+  labels:
+    deployhub.io/project: "{{ project_name }}"
+spec:
+  refreshInterval: "1h"
+  secretStoreRef:
+    name: aws-secrets-manager
+    kind: ClusterSecretStore
+  target:
+    name: {{ deployment_name }}-secrets-sync
+    creationPolicy: Owner
+  dataFrom:
+    - extract:
+        # Assumes secrets in AWS SM are stored under a path scoped to the tenant/project
+        key: deployhub/{{ project_name }}/{{ deployment_name }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ deployment_name }}
+  namespace: {{ namespace }}
+  labels:
+    app: {{ deployment_name }}
+    deployhub.io/project: "{{ project_name }}"
+spec:
+  replicas: {{ replicas | default(1) }}
+  selector:
+    matchLabels:
+      app: {{ deployment_name }}
+  template:
+    metadata:
+      labels:
+        app: {{ deployment_name }}
+    spec:
+      containers:
+        - name: app
+          image: {{ image_uri }}
+          envFrom:
+            - secretRef:
+                name: {{ deployment_name }}-secrets-sync
+          ports:
+            - containerPort: {{ port | default(8080) }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ deployment_name }}-svc
+  namespace: {{ namespace }}
+  labels:
+    app: {{ deployment_name }}
+    deployhub.io/project: "{{ project_name }}"
+spec:
+  selector:
+    app: {{ deployment_name }}
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: {{ port | default(8080) }}
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: {{ deployment_name }}-route
+  namespace: {{ namespace }}
+  labels:
+    deployhub.io/project: "{{ project_name }}"
+spec:
+  parentRefs:
+    - name: deployhub-gateway
+      namespace: deployhub-system
+  hostnames:
+    - "{{ project_name }}.deployhub.io"
+  rules:
+    - backendRefs:
+        - name: {{ deployment_name }}-svc
+          port: 80
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ deployment_name }}-pdb
+  namespace: {{ namespace }}
+  labels:
+    deployhub.io/project: "{{ project_name }}"
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: {{ deployment_name }}

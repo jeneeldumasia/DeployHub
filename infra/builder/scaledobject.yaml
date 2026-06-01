@@ -1,0 +1,18 @@
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: deployhub-builder-scaledobject
+  namespace: deployhub-build
+spec:
+  scaleTargetRef:
+    name: deployhub-builder
+  minReplicaCount: 0 # Scale to zero supported
+  maxReplicaCount: 100 # Target max 100 concurrent builds
+  cooldownPeriod: 300 # 5 minutes cooldown to prevent thrashing
+  triggers:
+    - type: redis-streams
+      metadata:
+        address: redis-master.deployhub-system.svc.cluster.local:6379
+        stream: builder_queue
+        consumerGroup: builder_group
+        pendingEntriesCount: "1" # Scale up for every 1 pending build

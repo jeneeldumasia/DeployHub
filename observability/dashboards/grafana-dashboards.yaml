@@ -1,0 +1,40 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboards
+  namespace: observability
+  labels:
+    grafana_dashboard: "1"
+data:
+  executive-dashboard.json: |-
+    {
+      "title": "Executive Dashboard",
+      "panels": [
+        {"title": "Platform Availability (SLO)", "type": "stat", "targets": [{"expr": "job:platform_availability:1h"}]},
+        {"title": "Deployment Success Rate (SLO)", "type": "stat", "targets": [{"expr": "job:deployment_success_rate:1h"}]}
+      ]
+    }
+  operations-dashboard.json: |-
+    {
+      "title": "Operations Dashboard",
+      "panels": [
+        {"title": "Reconciliation Drift", "type": "timeseries", "targets": [{"expr": "rate(deployhub_drift_total[5m])"}]},
+        {"title": "PostgreSQL & Redis Health", "type": "stat", "targets": [{"expr": "pg_up"}, {"expr": "up{job=\"redis\"}"}]}
+      ]
+    }
+  builder-dashboard.json: |-
+    {
+      "title": "Builder Dashboard",
+      "panels": [
+        {"title": "Queue Depth", "type": "timeseries", "targets": [{"expr": "deployhub_queue_depth"}]},
+        {"title": "Build Duration (95th)", "type": "stat", "targets": [{"expr": "job:build_duration_seconds:p95:1h"}]}
+      ]
+    }
+  platform-dashboard.json: |-
+    {
+      "title": "Platform Dashboard",
+      "panels": [
+        {"title": "Active Tenants", "type": "stat", "targets": [{"expr": "count(kube_namespace_labels{label_deployhub_io_tenant=\"true\"})"}]},
+        {"title": "DLQ Depth", "type": "timeseries", "targets": [{"expr": "deployhub_dlq_depth"}]}
+      ]
+    }
