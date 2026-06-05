@@ -8,3 +8,4 @@ resources:
   - servicemonitors.yaml
   - clusterissuer.yaml
   - certificate.yaml
+  - alertmanager-config.yaml

@@ -4,6 +4,8 @@ import { ArrowLeft, RefreshCw, GitBranch, Package, Clock, Terminal, Activity } f
 import { api } from "@/lib/api";
 import { StatusBadge } from "@/components/StatusBadge";
 import { AutoRefresh } from "./AutoRefresh";
+import { RedeployButton } from "./RedeployButton";
+import { LogViewer } from "./LogViewer";
 
 export const dynamic = "force-dynamic";
 
@@ -75,7 +77,7 @@ export default async function DeploymentPage({ params }: { params: { id: string;
 
   return (
     <div>
-      {isActive && <AutoRefresh intervalMs={4000} />}
+      {isActive && <AutoRefresh projectId={params.id} deploymentId={params.depId} />}
 
       <Link href={`/projects/${params.id}`} className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700 mb-6 group">
         <ArrowLeft size={14} className="group-hover:-translate-x-0.5 transition-transform" />
@@ -91,22 +93,36 @@ export default async function DeploymentPage({ params }: { params: { id: string;
             {isActive && (
               <span className="flex items-center gap-1.5 text-xs text-brand font-medium">
                 <RefreshCw size={11} className="animate-spin" />
-                Live
+                In Progress
               </span>
+            )}
+            {deployment.state === "Running" && (
+              <a 
+                href={`http://${shortId}.${params.id || "app"}.${process.env.NEXT_PUBLIC_APP_DOMAIN}`} 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="flex items-center gap-1.5 text-xs bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 px-2 py-0.5 rounded font-medium hover:bg-emerald-500/20 transition-colors"
+              >
+                <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                Live: {shortId}.{params.id || "app"}.{process.env.NEXT_PUBLIC_APP_DOMAIN}
+              </a>
             )}
           </div>
           <p className="text-sm text-text-secondary font-mono">{deployment.repo_url}</p>
         </div>
-        <a
-          href={`https://grafana.deployhub.jeneeldumasia.codes/d/pod-health?orgId=1&var-namespace=tenant-${params.id}&var-deployment=${params.depId}`}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="btn-secondary text-xs py-1.5 px-3"
-        >
-          <Activity size={14} />
-          View Metrics
-        </a>
-      </div>
+          <div className="flex items-center gap-2">
+            <a
+              href={`https://grafana.deployhub.jeneeldumasia.codes/d/pod-health?orgId=1&var-namespace=tenant-${params.id}&var-deployment=${params.depId}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="btn-secondary text-xs py-1.5 px-3"
+            >
+              <Activity size={14} />
+              View Metrics
+            </a>
+            <RedeployButton projectId={params.id} repoUrl={deployment.repo_url} port={deployment.port} />
+          </div>
+        </div>
 
       {/* Pipeline tracker */}
       <div className="card p-6 mb-6 overflow-x-auto">
@@ -164,7 +180,13 @@ export default async function DeploymentPage({ params }: { params: { id: string;
                   <td className="px-6 py-3"><StatusBadge status={b.status} /></td>
                   <td className="px-6 py-3 text-xs text-gray-400">{new Date(b.started_at).toLocaleString()}</td>
                   <td className="px-6 py-3 text-xs text-gray-400">{b.completed_at ? new Date(b.completed_at).toLocaleString() : "—"}</td>
-                  <td className="px-6 py-3 text-xs font-mono text-gray-400 truncate max-w-xs">{b.s3_log_uri ?? "—"}</td>
+                  <td className="px-6 py-3">
+                    {b.s3_log_uri ? (
+                      <LogViewer projectId={params.id} deploymentId={params.depId} buildId={b.build_id} />
+                    ) : (
+                      <span className="text-xs text-gray-500">—</span>
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>

@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, Loader2, ChevronDown, ChevronUp, Globe, GitBranch, Rocket, Settings2 } from "lucide-react";
+import { toast } from "sonner";
 import { api } from "@/lib/api";
 
 export default function NewDeploymentPage() {
@@ -23,6 +24,7 @@ export default function NewDeploymentPage() {
     setLoading(true);
     try {
       const dep = await api.deployments.create(projectId, { repo_url: repoUrl, branch, port });
+      toast.success("Deployment submitted successfully");
       router.push(`/projects/${projectId}/deployments/${dep.deployment_id}`);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Failed to submit deployment");

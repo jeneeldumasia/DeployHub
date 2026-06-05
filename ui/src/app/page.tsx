@@ -5,6 +5,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { MetricCard } from "@/components/MetricCard";
 import { EmptyState } from "@/components/EmptyState";
 import { PageHeader } from "@/components/PageHeader";
+import { ActivityFeed } from "./ActivityFeed";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Dashboard" };
@@ -41,13 +42,17 @@ export default async function DashboardPage() {
         <MetricCard label="Terminating"    value={terminating}    icon={AlertTriangle} color="amber" />
       </div>
 
+      {/* Projects and Activity Feed Grid */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        
       {/* Projects table */}
-      <div className="card overflow-hidden">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-canvas-border">
+      <div className="card overflow-hidden lg:col-span-2 flex flex-col h-[600px]">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-canvas-border shrink-0">
           <h2 className="text-sm font-semibold text-text-primary">Projects</h2>
           <span className="text-xs text-text-secondary">{projects.length} total</span>
         </div>
 
+        <div className="flex-1 overflow-y-auto">
         {projects.length === 0 ? (
           <EmptyState
             icon={FolderGit2}
@@ -103,6 +108,12 @@ export default async function DashboardPage() {
             </tbody>
           </table>
         )}
+      </div>
+      </div>
+      
+      <div className="lg:col-span-1">
+        <ActivityFeed />
+      </div>
       </div>
     </div>
   );

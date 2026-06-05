@@ -208,11 +208,13 @@ def reconcile_deployments(conn, cur, project):
                     template = jinja_env.get_template("app-deployment.yaml.j2")
                     manifests = template.render(
                         deployment_name=d_id,
+                        deployment_id=d_id,
                         namespace=project.namespace,
                         project_name=project.name,
                         image_uri=db_dep.get('image_uri', 'nginx:latest'),
                         port=db_dep.get('port', 8080),
-                        replicas=db_dep.get('replicas', 1)
+                        replicas=db_dep.get('replicas', 1),
+                        health_check_path=db_dep.get('health_check_path', '/')
                     )
                     apply_manifests(manifests)
                 else:

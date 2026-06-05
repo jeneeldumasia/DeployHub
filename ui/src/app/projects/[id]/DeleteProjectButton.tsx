@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Trash2, Loader2 } from "lucide-react";
+import { toast } from "sonner";
 import { api } from "@/lib/api";
 
 export function DeleteProjectButton({ projectId, projectName }: { projectId: string; projectName: string }) {
@@ -14,10 +15,11 @@ export function DeleteProjectButton({ projectId, projectName }: { projectId: str
     setLoading(true);
     try {
       await api.projects.delete(projectId);
+      toast.success("Project deleted");
       router.push("/");
-      router.refresh();
     } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : "Failed to delete project");
+      toast.error(err instanceof Error ? err.message : "Failed to delete project");
+    } finally {
       setLoading(false);
     }
   }

@@ -62,6 +62,12 @@ spec:
                 name: {{ deployment_name }}-secrets-sync
           ports:
             - containerPort: {{ port | default(8080) }}
+          readinessProbe:
+            httpGet:
+              path: "{{ health_check_path | default('/') }}"
+              port: {{ port | default(8080) }}
+            initialDelaySeconds: 5
+            periodSeconds: 10
 ---
 apiVersion: v1
 kind: Service

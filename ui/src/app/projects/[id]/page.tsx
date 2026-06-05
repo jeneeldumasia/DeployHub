@@ -7,6 +7,9 @@ import { MetricCard } from "@/components/MetricCard";
 import { EmptyState } from "@/components/EmptyState";
 import { PageHeader } from "@/components/PageHeader";
 import { DeleteProjectButton } from "./DeleteProjectButton";
+import { EnvVars } from "./EnvVars";
+import { Webhooks } from "./Webhooks";
+import { ProjectShortcuts } from "./ProjectShortcuts";
 
 export const dynamic = "force-dynamic";
 
@@ -129,6 +132,10 @@ export default async function ProjectPage({ params }: { params: { id: string } }
           </table>
         )}
       </div>
+
+      <EnvVars projectId={project.id} />
+      <Webhooks projectId={project.id} webhookSecret={project.webhook_secret} />
+      <ProjectShortcuts projectId={project.id} />
     </div>
   );
 }

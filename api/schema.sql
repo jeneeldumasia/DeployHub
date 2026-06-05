@@ -9,6 +9,7 @@ CREATE TABLE IF NOT EXISTS projects (
     name VARCHAR(255) NOT NULL,
     namespace VARCHAR(255) NOT NULL,
     status VARCHAR(50) NOT NULL DEFAULT 'Provisioning',
+    webhook_secret VARCHAR(255),
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     deleted_at TIMESTAMP
 );
@@ -26,6 +27,7 @@ CREATE TABLE IF NOT EXISTS deployments (
     image_uri TEXT,
     replicas INT DEFAULT 1,
     port INT DEFAULT 8080,
+    health_check_path VARCHAR(255) DEFAULT '/',
     state VARCHAR(50) NOT NULL,
     updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
     last_error TEXT

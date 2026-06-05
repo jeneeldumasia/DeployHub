@@ -59,6 +59,7 @@ export interface Project {
   status: "Provisioning" | "Ready" | "Terminating";
   created_at: string;
   deleted_at: string | null;
+  webhook_secret?: string;
 }
 
 export interface Deployment {
@@ -130,5 +131,21 @@ export const api = {
   audit: {
     list: (projectId: string) =>
       request<AuditLog[]>(`/projects/${projectId}/audit`),
+    listGlobal: () =>
+      request<AuditLog[]>("/audit"),
+  },
+
+  env: {
+    list: (projectId: string) =>
+      request<{ keys: string[] }>(`/projects/${projectId}/env`),
+    put: (projectId: string, key: string, value: string) =>
+      request<{ message: string }>(`/projects/${projectId}/env`, {
+        method: "PUT",
+        body: JSON.stringify({ key, value }),
+      }),
+    delete: (projectId: string, key: string) =>
+      request<{ message: string }>(`/projects/${projectId}/env/${key}`, {
+        method: "DELETE",
+      }),
   },
 };

@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, Loader2, FolderGit2 } from "lucide-react";
+import { toast } from "sonner";
 import { api } from "@/lib/api";
 
 export default function NewProjectPage() {
@@ -30,6 +31,7 @@ export default function NewProjectPage() {
     setLoading(true);
     try {
       const proj = await api.projects.create({ name, namespace });
+      toast.success("Project created successfully");
       router.push(`/projects/${proj.id}`);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Failed to create project");

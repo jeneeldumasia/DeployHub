@@ -1,21 +1,36 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 
 /**
- * Refreshes the current page every `intervalMs` milliseconds.
- * Used on the deployment detail page while a deployment is in-progress
- * so state transitions (Queued → Building → Running) show up without
- * the user manually refreshing.
+ * Connects to the WebSocket status endpoint for live updates.
+ * Calls router.refresh() when the backend emits a state transition.
  */
-export function AutoRefresh({ intervalMs }: { intervalMs: number }) {
+export function AutoRefresh({ projectId, deploymentId }: { projectId: string; deploymentId: string }) {
   const router = useRouter();
+  const lastState = useRef<string | null>(null);
 
   useEffect(() => {
-    const id = setInterval(() => router.refresh(), intervalMs);
-    return () => clearInterval(id);
-  }, [router, intervalMs]);
+    const wsUrl = process.env.NEXT_PUBLIC_API_URL?.replace("http", "ws") || "ws://localhost:8000";
+    const ws = new WebSocket(`${wsUrl}/ws/projects/${projectId}/deployments/${deploymentId}/status`);
+
+    ws.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        if (data.state && data.state !== lastState.current) {
+          lastState.current = data.state;
+          router.refresh();
+        }
+      } catch (e) {
+        console.error("Failed to parse websocket message", e);
+      }
+    };
+
+    return () => {
+      ws.close();
+    };
+  }, [router, projectId, deploymentId]);
 
   return null;
 }

@@ -10,6 +10,8 @@ export const metadata: Metadata = {
 import { auth } from "@/auth";
 
 import { ThemeProvider } from "@/components/ThemeProvider";
+import { CommandPalette } from "@/components/CommandPalette";
+import { Toaster } from "sonner";
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const session = await auth();
@@ -30,6 +32,8 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             {children}
           </main>
         </div>
+          <CommandPalette />
+          <Toaster position="bottom-right" theme="system" />
         </ThemeProvider>
       </body>
     </html>

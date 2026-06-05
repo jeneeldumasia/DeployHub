@@ -9,6 +9,7 @@ import threading
 import redis
 import psycopg2
 import boto3
+import yaml
 from prometheus_client import Histogram, start_http_server
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -127,6 +128,34 @@ def run_build(deployment_id: str, repo_url: str, image_name: str):
 
         s3_log_key = f"logs/{deployment_id}/build.log"
 
+        # Check for deployhub.yaml overrides
+        config_path = os.path.join(workspace, "deployhub.yaml")
+        pack_args = []
+        if os.path.exists(config_path):
+            try:
+                with open(config_path, 'r') as f:
+                    config = yaml.safe_load(f)
+                if config:
+                    new_port = config.get("port")
+                    new_health = config.get("health_check_path")
+                    if new_port or new_health:
+                        conn = get_db_conn()
+                        with conn.cursor() as cur:
+                            if new_port and new_health:
+                                cur.execute("UPDATE deployments SET port = %s, health_check_path = %s WHERE deployment_id = %s;", (new_port, new_health, deployment_id))
+                            elif new_port:
+                                cur.execute("UPDATE deployments SET port = %s WHERE deployment_id = %s;", (new_port, deployment_id))
+                            elif new_health:
+                                cur.execute("UPDATE deployments SET health_check_path = %s WHERE deployment_id = %s;", (new_health, deployment_id))
+                        conn.close()
+                        logger.info(f"Updated deployment overrides from deployhub.yaml: port={new_port}, health_check_path={new_health}")
+                    
+                    runtime = config.get("runtime")
+                    if runtime:
+                        pack_args.extend(["--buildpack", runtime])
+            except Exception as e:
+                logger.warning(f"Failed to parse deployhub.yaml: {e}")
+
         # Task 16 / fix #4.4: Kaniko removed entirely.
         # Kaniko requires filesystem overlay capabilities that are incompatible
         # with runAsNonRoot: true + all capabilities dropped. It would silently
@@ -140,7 +169,7 @@ def run_build(deployment_id: str, repo_url: str, image_name: str):
             "--path", workspace,
             "--builder", "paketobuildpacks/builder-jammy-base",
             "--publish",
-        ]
+        ] + pack_args
 
         logger.info(f"Executing: {' '.join(cmd)}")
 
@@ -176,7 +205,41 @@ def run_build(deployment_id: str, repo_url: str, image_name: str):
             # Non-fatal: the build result still matters more than the log upload
 
         if process.returncode == 0:
-            logger.info(f"Build {deployment_id} successful.")
+            logger.info(f"Build {deployment_id} successful. Checking ECR image scan results...")
+            
+            # ECR Image Scanning Gate
+            try:
+                ecr = boto3.client('ecr')
+                repo_name = image_name.split('/')[1].split(':')[0]
+                image_tag = image_name.split(':')[1]
+                
+                scan_status = "IN_PROGRESS"
+                attempts = 0
+                while scan_status in ("IN_PROGRESS", "PENDING") and attempts < 12:
+                    time.sleep(5)
+                    attempts += 1
+                    res = ecr.describe_image_scan_findings(
+                        repositoryName=repo_name,
+                        imageId={'imageTag': image_tag}
+                    )
+                    scan_status = res.get('imageScanStatus', {}).get('status', 'FAILED')
+                    
+                if scan_status == "COMPLETE":
+                    findings = res.get('imageScanFindings', {}).get('findingSeverityCounts', {})
+                    fail_on = os.getenv("IMAGE_SCAN_FAIL_ON", "CRITICAL")
+                    
+                    if findings.get(fail_on, 0) > 0:
+                        logger.error(f"Image scan failed: {findings.get(fail_on)} {fail_on} vulnerabilities found.")
+                        record_build(deployment_id, s3_log_key, "Failed")
+                        update_db_state(deployment_id, "Failed", f"Image scan: {fail_on} vulnerability found")
+                        return
+                    else:
+                        logger.info("Image scan passed.")
+                else:
+                    logger.warning(f"Image scan did not complete in time or failed. Status: {scan_status}")
+            except Exception as e:
+                logger.error(f"Error checking ECR image scan: {e}")
+                
             record_build(deployment_id, s3_log_key, "Success")
             update_db_state(deployment_id, "Deploying")
         else:
