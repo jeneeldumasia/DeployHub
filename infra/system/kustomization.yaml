@@ -9,3 +9,4 @@ resources:
   - clusterissuer.yaml
   - certificate.yaml
   - alertmanager-config.yaml
+  - cloudflare-secret.yaml

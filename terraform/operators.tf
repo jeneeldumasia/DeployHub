@@ -174,11 +174,6 @@ resource "helm_release" "cert_manager" {
     value = "true"
   }
 
-  set {
-    name  = "serviceAccount.annotations.eks\\.amazonaws\\.com/role-arn"
-    value = module.irsa_cert_manager.iam_role_arn
-  }
-
   depends_on = [module.eks]
 }
 

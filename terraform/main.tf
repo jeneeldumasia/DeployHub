@@ -256,27 +256,8 @@ output "github_actions_role_arn" {
   value       = module.iam_github_oidc_role.arn
 }
 
-# ── Route53 & Cert-Manager ───────────────────────────────────────────────────
-resource "aws_route53_zone" "deployhub" {
-  name = "jeneeldumasia.codes"
-}
-
-module "irsa_cert_manager" {
-  source  = "terraform-aws-modules/iam/aws//modules/iam-role-for-service-accounts-eks"
-  version = "~> 5.0"
-
-  role_name = "DeployHubCertManager"
-
-  attach_cert_manager_policy = true
-  cert_manager_hosted_zone_arns = [aws_route53_zone.deployhub.arn]
-
-  oidc_providers = {
-    main = {
-      provider_arn               = module.eks.oidc_provider_arn
-      namespace_service_accounts = ["cert-manager:cert-manager"]
-    }
-  }
-}
+# ── Cert-Manager ───────────────────────────────────────────────────
+# Removed irsa_cert_manager and aws_route53_zone since Cloudflare is used.
 
 # ── Karpenter ────────────────────────────────────────────────────────────────
 module "karpenter" {
@@ -297,13 +278,4 @@ module "karpenter" {
   }
 }
 
-output "route53_hosted_zone_id" {
-  description = "Route53 Hosted Zone ID for cert-manager DNS-01 challenges"
-  value       = aws_route53_zone.deployhub.zone_id
-}
-
-output "route53_nameservers" {
-  description = "Nameservers for the Hosted Zone. Update your domain registrar with these."
-  value       = aws_route53_zone.deployhub.name_servers
-}
 

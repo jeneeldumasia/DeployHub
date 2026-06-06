@@ -12,5 +12,8 @@ spec:
       name: letsencrypt-prod-account-key
     solvers:
     - dns01:
-        route53:
-          region: us-east-1
+        cloudflare:
+          email: "admin@jeneeldumasia.codes" # Replace with your Cloudflare account email
+          apiTokenSecretRef:
+            name: cloudflare-api-token-secret
+            key: api-token
