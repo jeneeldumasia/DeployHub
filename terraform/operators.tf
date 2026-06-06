@@ -125,50 +125,39 @@ resource "helm_release" "aws_load_balancer_controller" {
 # ClusterSecretStore object (the ServiceAccount is still managed by ArgoCD
 # but its annotation ARN is overridden here).
 
-resource "kubernetes_manifest" "eso_service_account" {
-  manifest = {
-    apiVersion = "v1"
-    kind       = "ServiceAccount"
-    metadata = {
-      name      = "external-secrets-sa"
-      namespace = "external-secrets"
-      annotations = {
-        # Fix #4.1 + #5.9: account ID from data source, not hardcoded
-        "eks.amazonaws.com/role-arn" = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/DeployHubESO"
-      }
-    }
-  }
+resource "kubectl_manifest" "eso_service_account" {
+  yaml_body = <<-YAML
+    apiVersion: v1
+    kind: ServiceAccount
+    metadata:
+      name: external-secrets-sa
+      namespace: external-secrets
+      annotations:
+        eks.amazonaws.com/role-arn: "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/DeployHubESO"
+  YAML
 
   depends_on = [helm_release.external_secrets]
 }
 
-resource "kubernetes_manifest" "cluster_secret_store" {
-  manifest = {
-    apiVersion = "external-secrets.io/v1beta1"
-    kind       = "ClusterSecretStore"
-    metadata = {
-      name = "aws-secrets-manager"
-    }
-    spec = {
-      provider = {
-        aws = {
-          service = "SecretsManager"
-          # Fix #5.9: region from Terraform variable, not hardcoded
-          region = var.aws_region
-          auth = {
-            jwt = {
-              serviceAccountRef = {
-                name      = "external-secrets-sa"
-                namespace = "external-secrets"
-              }
-            }
-          }
-        }
-      }
-    }
-  }
+resource "kubectl_manifest" "cluster_secret_store" {
+  yaml_body = <<-YAML
+    apiVersion: external-secrets.io/v1beta1
+    kind: ClusterSecretStore
+    metadata:
+      name: aws-secrets-manager
+    spec:
+      provider:
+        aws:
+          service: SecretsManager
+          region: "${var.aws_region}"
+          auth:
+            jwt:
+              serviceAccountRef:
+                name: external-secrets-sa
+                namespace: external-secrets
+  YAML
 
-  depends_on = [kubernetes_manifest.eso_service_account]
+  depends_on = [kubectl_manifest.eso_service_account]
 }
 
 # ── Cert Manager ─────────────────────────────────────────────────────────────

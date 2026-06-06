@@ -12,6 +12,10 @@ terraform {
       source  = "hashicorp/helm"
       version = "~> 2.12"
     }
+    kubectl = {
+      source  = "gavinbunney/kubectl"
+      version = ">= 1.14.0"
+    }
   }
 }
 
@@ -89,6 +93,17 @@ module "eks" {
 provider "kubernetes" {
   host                   = module.eks.cluster_endpoint
   cluster_ca_certificate = base64decode(module.eks.cluster_certificate_authority_data)
+  exec {
+    api_version = "client.authentication.k8s.io/v1beta1"
+    command     = "aws"
+    args        = ["eks", "get-token", "--cluster-name", module.eks.cluster_name]
+  }
+}
+
+provider "kubectl" {
+  host                   = module.eks.cluster_endpoint
+  cluster_ca_certificate = base64decode(module.eks.cluster_certificate_authority_data)
+  load_config_file       = false
   exec {
     api_version = "client.authentication.k8s.io/v1beta1"
     command     = "aws"
@@ -242,9 +257,8 @@ output "github_actions_role_arn" {
 }
 
 # ── Route53 & Cert-Manager ───────────────────────────────────────────────────
-data "aws_route53_zone" "deployhub" {
-  name         = "jeneeldumasia.codes"
-  private_zone = false
+resource "aws_route53_zone" "deployhub" {
+  name = "jeneeldumasia.codes"
 }
 
 module "irsa_cert_manager" {
@@ -254,7 +268,7 @@ module "irsa_cert_manager" {
   role_name = "DeployHubCertManager"
 
   attach_cert_manager_policy = true
-  cert_manager_hosted_zone_arns = [data.aws_route53_zone.deployhub.arn]
+  cert_manager_hosted_zone_arns = [aws_route53_zone.deployhub.arn]
 
   oidc_providers = {
     main = {
@@ -285,6 +299,11 @@ module "karpenter" {
 
 output "route53_hosted_zone_id" {
   description = "Route53 Hosted Zone ID for cert-manager DNS-01 challenges"
-  value       = data.aws_route53_zone.deployhub.zone_id
+  value       = aws_route53_zone.deployhub.zone_id
+}
+
+output "route53_nameservers" {
+  description = "Nameservers for the Hosted Zone. Update your domain registrar with these."
+  value       = aws_route53_zone.deployhub.name_servers
 }
 
