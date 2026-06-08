@@ -82,10 +82,10 @@ module "eks" {
   # Base node group — platform services, ArgoCD, controller, worker
   eks_managed_node_groups = {
     platform_nodes = {
-      min_size       = 1
-      max_size       = 3
-      desired_size   = 2
-      instance_types = ["t3.medium"]
+      min_size       = 2
+      max_size       = 4
+      desired_size   = 3
+      instance_types = ["t3.micro"]
       ami_type       = "AL2_x86_64"
 
       labels = {
