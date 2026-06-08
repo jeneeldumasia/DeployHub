@@ -132,39 +132,43 @@ resource "time_sleep" "wait_for_eso_crds" {
   create_duration = "15s"
 }
 
-resource "kubectl_manifest" "eso_service_account" {
-  yaml_body = <<-YAML
-    apiVersion: v1
-    kind: ServiceAccount
-    metadata:
-      name: external-secrets-sa
-      namespace: external-secrets
-      annotations:
-        eks.amazonaws.com/role-arn: "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/DeployHubESO"
-  YAML
-
-  depends_on = [time_sleep.wait_for_eso_crds]
+resource "kubernetes_service_account" "eso_service_account" {
+  metadata {
+    name      = "external-secrets-sa"
+    namespace = "external-secrets"
+    annotations = {
+      "eks.amazonaws.com/role-arn" = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/DeployHubESO"
+    }
+  }
+  depends_on = [helm_release.external_secrets]
 }
 
-resource "kubectl_manifest" "cluster_secret_store" {
-  yaml_body = <<-YAML
-    apiVersion: external-secrets.io/v1beta1
-    kind: ClusterSecretStore
-    metadata:
-      name: aws-secrets-manager
-    spec:
-      provider:
-        aws:
-          service: SecretsManager
-          region: "${var.aws_region}"
-          auth:
-            jwt:
-              serviceAccountRef:
-                name: external-secrets-sa
-                namespace: external-secrets
-  YAML
-
-  depends_on = [kubectl_manifest.eso_service_account]
+resource "null_resource" "cluster_secret_store" {
+  triggers = {
+    always_run = "$${timestamp()}"
+  }
+  provisioner "local-exec" {
+    command = <<EOT
+      aws eks update-kubeconfig --region $${var.aws_region} --name deployhub-cluster
+      cat <<EOF | kubectl apply -f -
+apiVersion: external-secrets.io/v1beta1
+kind: ClusterSecretStore
+metadata:
+  name: aws-secrets-manager
+spec:
+  provider:
+    aws:
+      service: SecretsManager
+      region: "$${var.aws_region}"
+      auth:
+        jwt:
+          serviceAccountRef:
+            name: external-secrets-sa
+            namespace: external-secrets
+EOF
+EOT
+  }
+  depends_on = [kubernetes_service_account.eso_service_account, time_sleep.wait_for_eso_crds]
 }
 
 # ── Cert Manager ─────────────────────────────────────────────────────────────

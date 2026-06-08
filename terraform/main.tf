@@ -118,12 +118,7 @@ module "ebs_csi_irsa_role" {
   }
 }
 
-resource "kubernetes_namespace" "deployhub_system" {
-  metadata {
-    name = "deployhub-system"
-  }
-  depends_on = [module.eks]
-}
+
 
 # Kubernetes provider — authenticated via EKS token
 provider "kubernetes" {

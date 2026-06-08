@@ -10,7 +10,7 @@ resource "helm_release" "redis" {
   chart            = "redis"
   version          = "19.6.4"
   namespace        = "deployhub-system"
-  create_namespace = false
+  create_namespace = true
 
   set {
     name  = "architecture"
@@ -37,5 +37,5 @@ resource "helm_release" "redis" {
     value = "redis-master"
   }
 
-  depends_on = [kubernetes_namespace.deployhub_system, helm_release.postgresql]
+  depends_on = [helm_release.postgresql]
 }
