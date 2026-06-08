@@ -86,6 +86,7 @@ module "eks" {
       max_size       = 3
       desired_size   = 2
       instance_types = ["t3.medium"]
+      ami_type       = "AL2_x86_64"
 
       labels = {
         "deployhub.jeneeldumasia.codes/node-type" = "platform"
@@ -274,6 +275,8 @@ module "karpenter" {
   cluster_name = module.eks.cluster_name
 
   enable_pod_identity  = false
+  enable_irsa          = true
+  irsa_oidc_provider_arn = module.eks.oidc_provider_arn
   create_iam_role      = true
   iam_role_name        = "DeployHubKarpenterController"
   create_node_iam_role = true
