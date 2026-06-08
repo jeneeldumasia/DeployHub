@@ -15,7 +15,7 @@ resource "helm_release" "kyverno" {
     value = "true"
   }
 
-  depends_on = [module.eks]
+  depends_on = [module.eks, helm_release.redis]
 }
 
 # Install default strict baseline policies (Pod Security Standards)

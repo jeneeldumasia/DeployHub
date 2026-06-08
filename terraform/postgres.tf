@@ -20,7 +20,7 @@ resource "helm_release" "postgresql" {
   chart            = "postgresql"
   version          = "15.5.23"
   namespace        = "deployhub-system"
-  create_namespace = true
+  create_namespace = false
 
   set {
     name  = "auth.database"
@@ -59,7 +59,7 @@ resource "helm_release" "postgresql" {
     value = "0"
   }
 
-  depends_on = [module.eks, helm_release.aws_load_balancer_controller]
+  depends_on = [kubernetes_namespace.deployhub_system, helm_release.keda]
 }
 
 # Write a Kubernetes Secret containing the full DATABASE_URL connection string.
@@ -89,7 +89,7 @@ resource "kubernetes_secret" "s3_config" {
     bucket_name = aws_s3_bucket.build_logs.id
   }
 
-  depends_on = [aws_s3_bucket.build_logs, module.eks]
+  depends_on = [kubernetes_namespace.deployhub_system, aws_s3_bucket.build_logs, module.eks]
 }
 
 # ECR repository URL secret — mounted by the API server to auto-generate image URIs.
@@ -106,5 +106,5 @@ resource "kubernetes_secret" "ecr_config" {
     registry_hostname = split("/", aws_ecr_repository.builds.repository_url)[0]
   }
 
-  depends_on = [aws_ecr_repository.builds, module.eks]
+  depends_on = [kubernetes_namespace.deployhub_system, aws_ecr_repository.builds, module.eks]
 }

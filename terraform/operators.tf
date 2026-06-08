@@ -10,7 +10,7 @@ resource "helm_release" "keda" {
   namespace        = "keda"
   create_namespace = true
 
-  depends_on = [module.eks, helm_release.aws_load_balancer_controller]
+  depends_on = [module.eks, helm_release.external_secrets]
 }
 
 # ── External Secrets Operator ────────────────────────────────────────────────
@@ -26,7 +26,7 @@ resource "helm_release" "external_secrets" {
     value = "true"
   }
 
-  depends_on = [module.eks, helm_release.aws_load_balancer_controller]
+  depends_on = [module.eks, helm_release.cert_manager]
 }
 
 # ── AWS Load Balancer Controller ─────────────────────────────────────────────
@@ -127,6 +127,11 @@ resource "helm_release" "aws_load_balancer_controller" {
 # ClusterSecretStore object (the ServiceAccount is still managed by ArgoCD
 # but its annotation ARN is overridden here).
 
+resource "time_sleep" "wait_for_eso_crds" {
+  depends_on      = [helm_release.external_secrets]
+  create_duration = "15s"
+}
+
 resource "kubectl_manifest" "eso_service_account" {
   yaml_body = <<-YAML
     apiVersion: v1
@@ -138,7 +143,7 @@ resource "kubectl_manifest" "eso_service_account" {
         eks.amazonaws.com/role-arn: "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/DeployHubESO"
   YAML
 
-  depends_on = [helm_release.external_secrets]
+  depends_on = [time_sleep.wait_for_eso_crds]
 }
 
 resource "kubectl_manifest" "cluster_secret_store" {
@@ -175,7 +180,7 @@ resource "helm_release" "cert_manager" {
     value = "true"
   }
 
-  depends_on = [module.eks, helm_release.aws_load_balancer_controller]
+  depends_on = [module.eks, helm_release.karpenter]
 }
 
 # ── Karpenter ────────────────────────────────────────────────────────────────

@@ -58,5 +58,5 @@ resource "helm_release" "argocd" {
     EOT
   ]
 
-  depends_on = [module.eks]
+  depends_on = [module.eks, helm_release.kube_prometheus_stack]
 }
