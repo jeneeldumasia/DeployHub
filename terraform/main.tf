@@ -1,4 +1,11 @@
 terraform {
+  cloud {
+    organization = "jeneel-deployhub" # TODO: Replace with your HCP Terraform organization name
+    workspaces {
+      name = "deployhub-prod"          # TODO: Replace with your HCP Terraform workspace name
+    }
+  }
+
   required_providers {
     aws = {
       source  = "hashicorp/aws"
