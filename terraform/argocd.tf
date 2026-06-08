@@ -17,7 +17,6 @@ resource "helm_release" "argocd" {
   chart            = "argo-cd"
   namespace        = "argocd"
   create_namespace = true
-  version          = "5.51.6"
 
   # Bootstrap the GitOps Application natively within the Helm chart values
   values = [

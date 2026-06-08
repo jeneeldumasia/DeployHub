@@ -7,7 +7,6 @@ resource "helm_release" "keda" {
   name             = "keda"
   repository       = "https://kedacore.github.io/charts"
   chart            = "keda"
-  version          = "2.14.2"
   namespace        = "keda"
   create_namespace = true
 
@@ -19,7 +18,6 @@ resource "helm_release" "external_secrets" {
   name             = "external-secrets"
   repository       = "https://charts.external-secrets.io"
   chart            = "external-secrets"
-  version          = "0.9.20"
   namespace        = "external-secrets"
   create_namespace = true
 
@@ -165,7 +163,6 @@ resource "helm_release" "cert_manager" {
   name             = "cert-manager"
   repository       = "https://charts.jetstack.io"
   chart            = "cert-manager"
-  version          = "v1.15.1"
   namespace        = "cert-manager"
   create_namespace = true
 
@@ -182,7 +179,6 @@ resource "helm_release" "karpenter" {
   name             = "karpenter"
   repository       = "oci://public.ecr.aws/karpenter"
   chart            = "karpenter"
-  version          = "0.37.0"
   namespace        = "karpenter"
   create_namespace = true
 

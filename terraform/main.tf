@@ -71,7 +71,7 @@ module "eks" {
   version = "~> 20.0"
 
   cluster_name    = "deployhub-cluster"
-  cluster_version = "1.29"
+  cluster_version = "1.36"
 
   vpc_id                   = module.vpc.vpc_id
   subnet_ids               = module.vpc.private_subnets
