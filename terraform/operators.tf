@@ -173,7 +173,7 @@ resource "null_resource" "cluster_secret_store" {
       # UNCONDITIONALLY clear the cache to guarantee apply fetches the fresh OpenAPI schema
       rm -rf ~/.kube/cache
 
-      cat <<EOF | kubectl apply -f -
+      cat <<EOF | kubectl apply --server-side -f -
 apiVersion: external-secrets.io/v1beta1
 kind: ClusterSecretStore
 metadata:
