@@ -185,7 +185,10 @@ resource "null_resource" "cluster_secret_store" {
       # UNCONDITIONALLY clear the cache to guarantee apply fetches the fresh OpenAPI schema
       rm -rf ~/.kube/cache
 
-      cat <<EOF | kubectl apply --server-side -f -
+      # Retry loop to bypass OpenAPI schema cache lag
+      MAX_RETRIES=10
+      RETRY_COUNT=0
+      until cat <<EOF | kubectl apply --server-side -f -
 apiVersion: external-secrets.io/v1beta1
 kind: ClusterSecretStore
 metadata:
@@ -201,6 +204,15 @@ spec:
             name: external-secrets-sa
             namespace: external-secrets
 EOF
+      do
+        RETRY_COUNT=$((RETRY_COUNT+1))
+        if [ $RETRY_COUNT -eq $MAX_RETRIES ]; then
+          echo "Failed to apply ClusterSecretStore after $MAX_RETRIES attempts."
+          exit 1
+        fi
+        echo "Retrying kubectl apply (attempt $RETRY_COUNT/$MAX_RETRIES)..."
+        sleep 5
+      done
 EOT
   }
   depends_on = [time_sleep.wait_for_eso_crds]

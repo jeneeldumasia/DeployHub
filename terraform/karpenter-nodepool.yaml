@@ -11,6 +11,8 @@ spec:
   securityGroupSelectorTerms:
     - tags:
         kubernetes.io/cluster/deployhub-cluster: "owned"
+  amiSelectorTerms:
+    - alias: al2023@latest
   tags:
     karpenter.sh/discovery: "deployhub-cluster"
 ---
