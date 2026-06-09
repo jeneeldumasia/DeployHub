@@ -37,7 +37,7 @@ resource "aws_iam_role_policy" "eso_secrets_manager" {
     Statement = [{
       Effect   = "Allow"
       Action   = ["secretsmanager:GetSecretValue", "secretsmanager:DescribeSecret"]
-      Resource = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:secret:deployhub/*"
+      Resource = "arn:aws:secretsmanager:${var.aws_region}:${data.aws_caller_identity.current.account_id}:secret:deployhub/*"
     }]
   })
 }
