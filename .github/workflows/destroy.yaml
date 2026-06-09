@@ -227,11 +227,22 @@ jobs:
             fi
           fi
 
+      # Step 8.5: Force Uninstall Problematic Helm Releases
+      # Kyverno often hangs during terraform destroy because its cleanup job
+      # fails to run or its webhooks cause a deadlock. Force uninstalling it
+      # without hooks ensures Terraform can cleanly remove it from state.
+      - name: Force Uninstall Problematic Helm Releases
+        run: |
+          echo "Force uninstalling Kyverno without hooks..."
+          helm uninstall kyverno-policies -n kyverno --no-hooks --ignore-not-found || true
+          helm uninstall kyverno -n kyverno --no-hooks --ignore-not-found || true
+
       # Step 9: Full Terraform destroy. By this point:
       # - Karpenter nodes are gone (ENIs released)
       # - Load balancers are gone (ENIs and SGs released)
       # - App namespaces are terminated
       # - ArgoCD is not fighting us
+      # - Kyverno is forcefully uninstalled
       # Terraform should be able to cleanly destroy EKS, the VPC, and S3.
       - name: Terraform Destroy
         working-directory: ./terraform
