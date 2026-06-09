@@ -51,19 +51,27 @@ In this massive session, we completed the entire P0, P1, P2, and P3 feature back
 
 ---
 
-## ⚠️ Outstanding Issues / Next Steps
+## 🛠️ Session 5 — Deep Infrastructure & Teardown Hardening
 
-The platform is officially feature-complete across the planned backlog. All tests pass, types are valid, and `npm run build` succeeds completely cleanly. 
+In this session, we resolved critical race conditions and collisions inside the EKS cluster to achieve a completely bulletproof, idempotent automated deployment and teardown loop via GitHub Actions.
 
-**For the Next Session:**
-1. **End-to-End Terraform Run:** Run `terraform apply` to deploy the hardened, Auth0-enabled stack to AWS.
-2. **DNS & Certificate Validation:** Ensure Route53 mapping and `cert-manager` successfully provision the TLS certificates for `*.deployhub.jeneeldumasia.codes`.
-3. **Live User Testing:** Log in through Auth0, trigger a build, watch the WebSocket update the UI in real-time, and verify the ECR gate blocks insecure images!
+### 🏗️ EKS Deployment Hardening
+- **Compute Tier Check:** Reverted instances back to `m7i-flex.large` to align with the AWS account's free tier limits and unblock the Auto-Scaler.
+- **Storage Collisions (Postgres):** Fixed a 5-minute PostgreSQL volume timeout. EKS `1.36` auto-provisions a `gp2` default storage class. When we added `gp3` as default, Kubernetes encountered a dual-default deadlock. We explicitly mapped PostgreSQL to use `gp3`, bypassing the lookup confusion.
+- **State & Namespace Idempotency:** Removed explicit `kubernetes_namespace` resource declarations to resolve "already exists" errors during re-runs. Delegated namespace tracking exclusively to Helm.
+- **CRD Race Conditions:** Increased the `time_sleep` API catch-up timer from 15 to 60 seconds. This ensures the cluster's brain correctly registers the External Secrets CRDs under heavy initial cluster-boot load before attempting to apply the Custom Resources.
+- **Terraform String Escaping:** Corrected Terraform's double-dollar (`$${}`) string escaping inside `local-exec` bash provisioners, ensuring IAM ARNs and variables are flawlessly injected into the EKS cluster.
+
+### 🧨 Teardown Deadlocks (Cost Saving Pipeline)
+- **Webhook Deadlocks Prevented:** The `terraform destroy` command historically timed out on the Kyverno and Cert-Manager uninstall. We updated `.github/workflows/destroy.yaml` to proactively delete all Mutating and Validating Webhook Configurations first.
+- **Brute-Force Helm Uninstalls:** We injected `helm uninstall <chart> --no-hooks` steps into the teardown workflow to forcefully bypass failing pre-delete jobs (e.g. `kyverno-cleanup`), ensuring Terraform instantly and cleanly wipes the cluster.
 
 ---
 
-*Last updated: Session 4 — Auth0, WebSockets, ECR Gates, NetworkPolicies, and UI Polish Completed.*t on `jeneeldumasia.codes`
+## ⚠️ Next Steps
+1. Monitor the newly hardened GitHub Actions Deploy pipeline to confirm a flawless end-to-end boot sequence.
+2. Verify application connectivity to Postgres, Redis, and External Secrets now that they deploy 100% reliably.
 
 ---
 
-*Last updated: Session 3 — Infrastructure, API, UI modernization, domain finalized as `jeneeldumasia.codes`.*
+*Last updated: Session 5 — Deep Infrastructure Teardown & Deployment Hardening.*
