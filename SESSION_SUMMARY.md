@@ -68,10 +68,23 @@ In this session, we resolved critical race conditions and collisions inside the 
 
 ---
 
+## 🔍 Session 6 — Comprehensive Audit & Latent Bug Fixes
+
+In this session, we uncovered that static scanners (`tfsec`, `checkov`) are completely blind to logical architecture and API version mismatches. Several "silent" configuration errors were found and fixed to prevent the cluster from hanging on a fresh boot.
+
+### 🐛 Mistakes Made & Lessons Learned for the Future
+1. **API Version Exactness (Karpenter):** I assumed the `amiFamily` parameter was sufficient for Karpenter nodes, but the `v1` API introduced a hard requirement for `amiSelectorTerms`. **Lesson:** Always cross-reference exact API version requirements (especially `v1beta1` vs `v1`) rather than relying on legacy tutorial structures.
+2. **OpenAPI Cache Race Conditions:** I assumed that using `kubectl apply --server-side` combined with `rm -rf ~/.kube/cache` would reliably bypass Kubernetes resource mapping errors when applying CRDs (like `ClusterSecretStore`) immediately after installing them. It did not. **Lesson:** The only bulletproof way to survive CRD eventual consistency in CI/CD pipelines is a hardcoded Bash `until` retry loop with a `sleep`. Do not trust cache-clearing commands alone.
+3. **Gateway API vs. Ingress:** We had an `HTTPRoute` for Grafana but absolutely no `Gateway` controller or resource provisioning the ALB. **Lesson:** Always manually trace network topologies end-to-end (Route -> Gateway -> Controller). Never assume the underlying infrastructure is automatically configured just because a route manifest exists.
+4. **ArgoCD Kustomize Blindspots:** I deleted `cluster-secret-store.yaml` but forgot to immediately remove its parent directory from the root `kustomization.yaml`, which silently broke ArgoCD syncs. **Lesson:** Every time a file or directory is moved/deleted, instantly `grep` the codebase for Kustomize and Helm references to it to prevent broken sync states.
+5. **Dual-Default StorageClasses:** We applied `is-default-class = "true"` to a `gp3` storage class while EKS inherently provisions a `gp2` default. **Lesson:** Never set a default StorageClass on EKS without explicitly removing the default annotation from the managed CSI add-on's `gp2` class first.
+
+---
+
 ## ⚠️ Next Steps
 1. Monitor the newly hardened GitHub Actions Deploy pipeline to confirm a flawless end-to-end boot sequence.
 2. Verify application connectivity to Postgres, Redis, and External Secrets now that they deploy 100% reliably.
 
 ---
 
-*Last updated: Session 5 — Deep Infrastructure Teardown & Deployment Hardening.*
+*Last updated: Session 6 — Comprehensive Audit & Latent Bug Fixes.*
