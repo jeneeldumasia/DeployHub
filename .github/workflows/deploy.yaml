@@ -40,6 +40,7 @@ jobs:
         with:
           working_directory: ./terraform
           soft_fail: true # Set to false to block deployments on security issues
+          github_token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Run Checkov
         uses: bridgecrewio/checkov-action@v12
