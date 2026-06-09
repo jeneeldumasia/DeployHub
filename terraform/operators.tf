@@ -166,10 +166,12 @@ resource "null_resource" "cluster_secret_store" {
 
       echo "Waiting for API server to serve the new CRD endpoint..."
       until kubectl get clustersecretstores.external-secrets.io >/dev/null 2>&1; do
-        rm -rf ~/.kube/cache
         echo "Waiting for endpoint..."
         sleep 5
       done
+
+      # UNCONDITIONALLY clear the cache to guarantee apply fetches the fresh OpenAPI schema
+      rm -rf ~/.kube/cache
 
       cat <<EOF | kubectl apply -f -
 apiVersion: external-secrets.io/v1beta1
