@@ -164,9 +164,12 @@ resource "null_resource" "cluster_secret_store" {
       done
       kubectl wait --for condition=established --timeout=120s crd/clustersecretstores.external-secrets.io
 
-      echo "Refreshing Kubernetes API discovery cache..."
-      rm -rf ~/.kube/cache
-      kubectl api-resources > /dev/null || true
+      echo "Waiting for API server to serve the new CRD endpoint..."
+      until kubectl get clustersecretstores.external-secrets.io >/dev/null 2>&1; do
+        rm -rf ~/.kube/cache
+        echo "Waiting for endpoint..."
+        sleep 5
+      done
 
       cat <<EOF | kubectl apply -f -
 apiVersion: external-secrets.io/v1beta1

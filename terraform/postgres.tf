@@ -79,6 +79,9 @@ resource "helm_release" "postgresql" {
     value = "0"
   }
 
+  # Increase timeout to 10 minutes because Karpenter EC2 node provisioning + DB init can exceed 5 mins
+  timeout = 600
+
   # REQUIRED ON EKS: The EBS CSI driver mounts the volume as root.
   # The postgres user (1001) will get Permission Denied during initdb.
   # This runs an initContainer to chown the volume back to 1001.
@@ -87,7 +90,7 @@ resource "helm_release" "postgresql" {
     value = "true"
   }
 
-  depends_on = [helm_release.keda, kubernetes_storage_class.gp3]
+  depends_on = [helm_release.keda, kubernetes_storage_class.gp3, helm_release.karpenter]
 }
 
 # Write a Kubernetes Secret containing the full DATABASE_URL connection string.
