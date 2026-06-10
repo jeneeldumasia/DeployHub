@@ -85,7 +85,7 @@ module "eks" {
       min_size       = 1
       max_size       = 4
       desired_size   = 3
-      instance_types = ["t3.large"]
+      instance_types = [var.platform_instance_type]
       ami_type       = "AL2023_x86_64_STANDARD"
 
       labels = {

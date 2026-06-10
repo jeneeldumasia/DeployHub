@@ -26,6 +26,36 @@ jobs:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
 
+      - name: Determine Allowed Instance Type
+        id: probe
+        run: |
+          # We test instance types from preferred to fallback
+          INSTANCE_TYPES="m7i-flex.large m5.large t3.large t3.medium"
+          ALLOWED=""
+          
+          # Get the latest Amazon Linux 2 AMI to test run-instances
+          AMI_ID=$(aws ssm get-parameters --names /aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2 --query 'Parameters[0].Value' --output text)
+          
+          for IT in $INSTANCE_TYPES; do
+            echo "Testing $IT..."
+            # --dry-run returns exit code 255 if unauthorized, but successfully catches DryRunOperation
+            OUTPUT=$(aws ec2 run-instances --image-id $AMI_ID --instance-type $IT --min-count 1 --max-count 1 --dry-run 2>&1 || true)
+            if echo "$OUTPUT" | grep -q "DryRunOperation"; then
+              echo "✅ $IT is allowed!"
+              ALLOWED=$IT
+              break
+            else
+              echo "❌ $IT is not allowed (IAM restriction)"
+            fi
+          done
+          
+          if [ -z "$ALLOWED" ]; then
+            echo "Error: No instance types from the list are allowed!"
+            exit 1
+          fi
+          
+          echo "TF_VAR_platform_instance_type=$ALLOWED" >> $GITHUB_ENV
+
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
