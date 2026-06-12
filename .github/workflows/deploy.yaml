@@ -62,6 +62,8 @@ jobs:
           kubectl delete mutatingwebhookconfigurations --all || true
           kubectl patch clusterpolicies.kyverno.io --all -p '{"metadata":{"finalizers":[]}}' --type=merge || true
           kubectl patch policies.kyverno.io --all -A -p '{"metadata":{"finalizers":[]}}' --type=merge || true
+          helm uninstall kyverno -n kyverno --no-hooks || true
+          terraform state rm helm_release.kyverno || true
 
       - name: Terraform Apply
         working-directory: ./terraform
