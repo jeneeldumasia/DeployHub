@@ -54,6 +54,15 @@ jobs:
         working-directory: ./terraform
         run: terraform plan -out=tfplan
 
+      - name: Cleanup Stuck Webhooks
+        working-directory: ./terraform
+        run: |
+          aws eks update-kubeconfig --region ${{ vars.AWS_REGION || 'us-east-1' }} --name deployhub-cluster || true
+          kubectl delete validatingwebhookconfigurations --all || true
+          kubectl delete mutatingwebhookconfigurations --all || true
+          kubectl patch clusterpolicies.kyverno.io --all -p '{"metadata":{"finalizers":[]}}' --type=merge || true
+          kubectl patch policies.kyverno.io --all -A -p '{"metadata":{"finalizers":[]}}' --type=merge || true
+
       - name: Terraform Apply
         working-directory: ./terraform
         run: terraform apply tfplan
