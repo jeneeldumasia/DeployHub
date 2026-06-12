@@ -19,7 +19,7 @@ variable "grafana_password" {
 }
 
 variable "platform_instance_type" {
-  description = "The EC2 instance type for the platform node group. This should be determined dynamically to avoid Learner Lab limits."
+  description = "EC2 instance type for the platform node group"
   type        = string
-  default     = "c7i-flex.large"
+  default     = "t3.medium"
 }

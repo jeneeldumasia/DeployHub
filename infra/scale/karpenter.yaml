@@ -32,7 +32,7 @@ spec:
           values: ["spot", "on-demand"]
         - key: karpenter.k8s.aws/instance-category
           operator: In
-          values: ["c", "m", "r"]
+          values: ["c", "m", "r", "t"]
       nodeClassRef:
         group: karpenter.k8s.aws
         kind: EC2NodeClass
@@ -62,7 +62,7 @@ spec:
           values: ["on-demand"]
         - key: karpenter.k8s.aws/instance-category
           operator: In
-          values: ["m", "c"]
+          values: ["m", "c", "t"]
       nodeClassRef:
         group: karpenter.k8s.aws
         kind: EC2NodeClass
