@@ -6,8 +6,9 @@
 
 resource "helm_release" "redis" {
   name             = "redis"
-  repository       = "https://charts.bitnami.com/bitnami"
+  repository       = "oci://registry-1.docker.io/bitnamicharts"
   chart            = "redis"
+  version          = "27.0.8"
   namespace        = "deployhub-system"
   create_namespace = true
 

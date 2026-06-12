@@ -16,8 +16,9 @@ resource "time_sleep" "wait_for_ebs_csi" {
 
 resource "helm_release" "postgresql" {
   name             = "postgres"
-  repository       = "https://charts.bitnami.com/bitnami"
+  repository       = "oci://registry-1.docker.io/bitnamicharts"
   chart            = "postgresql"
+  version          = "18.7.3"
   namespace        = "deployhub-system"
   create_namespace = true
 
