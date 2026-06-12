@@ -219,7 +219,7 @@ resource "null_resource" "cluster_secret_store" {
       MAX_RETRIES=10
       RETRY_COUNT=0
       until cat <<EOF | kubectl apply --server-side -f -
-apiVersion: external-secrets.io/v1
+apiVersion: external-secrets.io/v1beta1
 kind: ClusterSecretStore
 metadata:
   name: aws-secrets-manager
