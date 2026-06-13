@@ -1,0 +1,46 @@
+﻿apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: deployhub-platform
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: "https://github.com/jeneeldumasia/DeployHub.git"
+    targetRevision: HEAD
+    path: infra
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: default
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: false
+    syncOptions:
+      - RespectIgnoreDifferences=true
+  ignoreDifferences:
+    - group: apps
+      kind: Deployment
+      name: deployhub-builder
+      namespace: deployhub-build
+      jsonPointers:
+        - /spec/replicas
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: deployhub-gateway
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: "https://github.com/jeneeldumasia/DeployHub.git"
+    targetRevision: HEAD
+    path: gateway
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: deployhub-system
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true

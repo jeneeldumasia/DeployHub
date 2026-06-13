@@ -42,8 +42,8 @@ spec:
           value: builder
           effect: NoSchedule
   disruption:
-    consolidationPolicy: WhenUnderutilized
-    expireAfter: 720h
+    consolidationPolicy: WhenEmptyOrUnderutilized
+    consolidateAfter: 1m
 ---
 # Tenant NodePool — stable on-demand nodes for user application workloads
 apiVersion: karpenter.sh/v1
@@ -72,4 +72,5 @@ spec:
           value: tenant
           effect: NoSchedule
   disruption:
-    consolidationPolicy: WhenUnderutilized
+    consolidationPolicy: WhenEmptyOrUnderutilized
+    consolidateAfter: 1m

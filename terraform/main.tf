@@ -238,6 +238,18 @@ resource "aws_secretsmanager_secret_version" "ecr_pull_token" {
   secret_string = "placeholder"  # Will be rotated by an external cronjob/lambda
 }
 
+# ── Cloudflare API Token Secret ───────────────────────────────────────────────
+# Used by External Secrets Operator to inject Cloudflare credentials for Cert-Manager
+resource "aws_secretsmanager_secret" "cloudflare_api_token" {
+  name                    = "deployhub/cloudflare"
+  recovery_window_in_days = 0
+}
+
+resource "aws_secretsmanager_secret_version" "cloudflare_api_token" {
+  secret_id     = aws_secretsmanager_secret.cloudflare_api_token.id
+  secret_string = "placeholder" # User must manually update this in AWS Console
+}
+
 # ── S3 Bucket for Build Logs ─────────────────────────────────────────────────
 resource "aws_s3_bucket" "build_logs" {
   bucket_prefix = "deployhub-build-logs-"
