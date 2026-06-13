@@ -79,10 +79,8 @@ resource "helm_release" "postgresql" {
   # Previous 10 min timeout was too tight on a cold cluster boot.
   timeout = 900
 
-  # Fix: removed depends_on [helm_release.keda, helm_release.karpenter].
-  # Postgres does not depend on KEDA or Karpenter — it runs on the managed
-  # node group. The real dependency is the EBS CSI addon being ready.
-  depends_on = [time_sleep.wait_for_ebs_csi]
+  # Fix: wait for kyverno to be fully ready so webhooks don't fail
+  depends_on = [time_sleep.wait_for_ebs_csi, helm_release.kyverno]
 }
 
 # Full DATABASE_URL connection string — all services mount this as an env var.

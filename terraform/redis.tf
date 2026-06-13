@@ -37,5 +37,5 @@ resource "helm_release" "redis" {
     value = "redis-master"
   }
 
-  depends_on = [module.eks]
+  depends_on = [module.eks, helm_release.kyverno]
 }
