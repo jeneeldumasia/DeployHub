@@ -14,19 +14,13 @@ resource "time_sleep" "wait_for_ebs_csi" {
   depends_on      = [module.eks]
 }
 
-resource "kubernetes_namespace" "deployhub_system" {
-  metadata {
-    name = "deployhub-system"
-  }
-}
-
 resource "helm_release" "postgresql" {
   name             = "postgres"
   repository       = "oci://registry-1.docker.io/bitnamicharts"
   chart            = "postgresql"
   version          = "18.7.3"
-  namespace        = kubernetes_namespace.deployhub_system.metadata[0].name
-  create_namespace = false
+  namespace        = "deployhub-system"
+  create_namespace = true
 
   # Fix: explicitly set gp2 StorageClass.
   # Without this, the PVC uses the cluster default which on EKS 1.36 + AL2023
@@ -95,7 +89,7 @@ resource "helm_release" "postgresql" {
 resource "kubernetes_secret" "db_credentials" {
   metadata {
     name      = "deployhub-db-credentials"
-    namespace = kubernetes_namespace.deployhub_system.metadata[0].name
+    namespace = "deployhub-system"
   }
 
   data = {
@@ -109,14 +103,14 @@ resource "kubernetes_secret" "db_credentials" {
 resource "kubernetes_secret" "s3_config" {
   metadata {
     name      = "deployhub-s3-config"
-    namespace = kubernetes_namespace.deployhub_system.metadata[0].name
+    namespace = "deployhub-system"
   }
 
   data = {
     bucket_name = aws_s3_bucket.build_logs.id
   }
 
-  depends_on = [aws_s3_bucket.build_logs, module.eks]
+  depends_on = [aws_s3_bucket.build_logs, module.eks, helm_release.postgresql]
 }
 
 # ECR repo URL — mounted by API server and controller.
@@ -125,7 +119,7 @@ resource "kubernetes_secret" "s3_config" {
 resource "kubernetes_secret" "ecr_config" {
   metadata {
     name      = "deployhub-ecr-config"
-    namespace = kubernetes_namespace.deployhub_system.metadata[0].name
+    namespace = "deployhub-system"
   }
 
   data = {
@@ -133,5 +127,5 @@ resource "kubernetes_secret" "ecr_config" {
     registry_hostname = split("/", aws_ecr_repository.builds.repository_url)[0]
   }
 
-  depends_on = [aws_ecr_repository.builds, module.eks]
+  depends_on = [aws_ecr_repository.builds, module.eks, helm_release.postgresql]
 }
