@@ -17,60 +17,65 @@ resource "helm_release" "argocd" {
   chart            = "argo-cd"
   namespace        = "argocd"
   create_namespace = true
-
-  # Bootstrap the GitOps Application natively within the Helm chart values
-  values = [
-    <<-EOT
-    server:
-      additionalApplications:
-        - name: deployhub-platform
-          namespace: argocd
-          project: default
-          source:
-            repoURL: "https://github.com/jeneeldumasia/DeployHub.git"
-            targetRevision: HEAD
-            path: infra
-          destination:
-            server: https://kubernetes.default.svc
-            namespace: default
-          syncPolicy:
-            automated:
-              prune: true
-              # Fix #5.8: selfHeal: true caused ArgoCD to fight KEDA.
-              # KEDA scales the builder Deployment away from replicas: 0 when
-              # there are pending builds. With selfHeal enabled, ArgoCD detects
-              # the replica count drift and immediately resets it back to 0,
-              # preventing builders from ever running.
-              # selfHeal is disabled; KEDA is the authoritative scaler for the
-              # builder Deployment. All other resources remain pruned/synced.
-              selfHeal: false
-            syncOptions:
-              # Prevent ArgoCD from managing the builder Deployment replica count.
-              # The ScaledObject owns this field.
-              - RespectIgnoreDifferences=true
-          ignoreDifferences:
-            - group: apps
-              kind: Deployment
-              name: deployhub-builder
-              namespace: deployhub-build
-              jsonPointers:
-                - /spec/replicas
-        - name: deployhub-gateway
-          namespace: argocd
-          project: default
-          source:
-            repoURL: "https://github.com/jeneeldumasia/DeployHub.git"
-            targetRevision: HEAD
-            path: gateway
-          destination:
-            server: https://kubernetes.default.svc
-            namespace: default
-          syncPolicy:
-            automated:
-              prune: true
-              selfHeal: true
-    EOT
-  ]
-
   depends_on = [module.eks, helm_release.kube_prometheus_stack]
+}
+
+resource "null_resource" "argocd_apps" {
+  triggers = {
+    always_run = "${timestamp()}"
+  }
+  provisioner "local-exec" {
+    command = <<EOT
+      aws eks update-kubeconfig --region ${var.aws_region} --name deployhub-cluster
+      cat <<EOF | kubectl apply -f -
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: deployhub-platform
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: "https://github.com/jeneeldumasia/DeployHub.git"
+    targetRevision: HEAD
+    path: infra
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: default
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: false
+    syncOptions:
+      - RespectIgnoreDifferences=true
+  ignoreDifferences:
+    - group: apps
+      kind: Deployment
+      name: deployhub-builder
+      namespace: deployhub-build
+      jsonPointers:
+        - /spec/replicas
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: deployhub-gateway
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: "https://github.com/jeneeldumasia/DeployHub.git"
+    targetRevision: HEAD
+    path: gateway
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: deployhub-system
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+EOF
+EOT
+  }
+  depends_on = [helm_release.argocd]
 }

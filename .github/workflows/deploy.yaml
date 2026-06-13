@@ -56,16 +56,6 @@ jobs:
           aws eks update-kubeconfig --region ${{ vars.AWS_REGION || 'us-east-1' }} --name deployhub-cluster || true
           kubectl delete validatingwebhookconfigurations --all || true
           kubectl delete mutatingwebhookconfigurations --all || true
-          kubectl patch clusterpolicies.kyverno.io --all -p '{"metadata":{"finalizers":[]}}' --type=merge || true
-          kubectl patch policies.kyverno.io --all -A -p '{"metadata":{"finalizers":[]}}' --type=merge || true
-          helm uninstall kyverno -n kyverno --no-hooks || true
-          helm uninstall postgres -n deployhub-system --no-hooks || true
-          helm uninstall redis -n deployhub-system --no-hooks || true
-          kubectl delete secret -l owner=helm,name=redis -n deployhub-system || true
-          kubectl delete secret -l owner=helm,name=postgres -n deployhub-system || true
-          terraform state rm helm_release.kyverno || true
-          terraform state rm helm_release.postgresql || true
-          terraform state rm helm_release.redis || true
 
       - name: Terraform Plan
         working-directory: ./terraform
