@@ -248,6 +248,11 @@ EOT
   depends_on = [time_sleep.wait_for_eso_crds]
 }
 
+resource "time_sleep" "wait_for_alb_webhook" {
+  depends_on      = [helm_release.aws_load_balancer_controller]
+  create_duration = "45s"
+}
+
 # ── Cert Manager ─────────────────────────────────────────────────────────────
 resource "helm_release" "cert_manager" {
   name             = "cert-manager"
@@ -261,7 +266,7 @@ resource "helm_release" "cert_manager" {
     value = "true"
   }
 
-  depends_on = [module.eks]
+  depends_on = [module.eks, time_sleep.wait_for_alb_webhook]
 }
 
 # ── Karpenter ────────────────────────────────────────────────────────────────

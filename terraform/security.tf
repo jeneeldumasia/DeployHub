@@ -14,7 +14,7 @@ resource "helm_release" "kyverno" {
     value = "true"
   }
 
-  depends_on = [module.eks]
+  depends_on = [module.eks, time_sleep.wait_for_alb_webhook]
 }
 
 resource "helm_release" "kyverno_policies" {
