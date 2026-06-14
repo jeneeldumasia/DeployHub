@@ -103,118 +103,11 @@ jobs:
               kubectl delete svc "$NAME" -n "$NS" --ignore-not-found=true || true
             done
 
-      # Step 5: Force Delete and Wait for Load Balancers.
-      # If the cluster was already destroyed, the ALB controller is dead and cannot
-      # clean up ALBs. We must manually delete them and their target groups.
-      - name: Force Delete and Wait for Load Balancers
-        run: |
-          echo "Finding and deleting any remaining AWS Load Balancers..."
-          MAX_WAIT=180
-          ELAPSED=0
-
-          while [ $ELAPSED -lt $MAX_WAIT ]; do
-            ALB_ARNS=$(aws elbv2 describe-load-balancers \
-              --query "LoadBalancers[?contains(LoadBalancerName, 'deployhu') || contains(LoadBalancerName, 'deployhub')].LoadBalancerArn" \
-              --output text 2>/dev/null || echo "")
-
-            if [ -z "$ALB_ARNS" ]; then
-              echo "All load balancers deprovisioned."
-              break
-            fi
-
-            for ARN in $ALB_ARNS; do
-              echo "Force deleting ALB: $ARN"
-              aws elbv2 delete-load-balancer --load-balancer-arn "$ARN" 2>/dev/null || true
-            done
-
-            echo "Load balancers still active. Waiting... (${ELAPSED}s elapsed)"
-            sleep 15
-            ELAPSED=$((ELAPSED + 15))
-          done
-
-          if [ $ELAPSED -ge $MAX_WAIT ]; then
-            echo "WARNING: Load balancers may still be active after ${MAX_WAIT}s. Proceeding anyway."
-          fi
-
-          echo "Cleaning up any orphaned Target Groups..."
-          TG_ARNS=$(aws elbv2 describe-target-groups \
-            --query "TargetGroups[?contains(TargetGroupName, 'k8s-') || contains(TargetGroupName, 'deployhu')].TargetGroupArn" \
-            --output text 2>/dev/null || echo "")
-            
-          for TG in $TG_ARNS; do
-            echo "Deleting orphaned Target Group: $TG"
-            aws elbv2 delete-target-group --target-group-arn "$TG" 2>/dev/null || true
-          done
-
-      # Step 6: Delete Application Namespaces
-      # Deleting system namespaces causes the EKS control plane to report errors
-      # and can cause Terraform to hang waiting for node groups.
-      - name: Delete Application Namespaces
-        if: env.cluster_not_found != 'true'
-        run: |
-          APP_NAMESPACES="argocd deployhub-system deployhub-build observability"
-          
-          # CRITICAL: Delete all webhooks first! If Kyverno or AWS Load Balancer webhooks
-          # are left behind but their pods are deleted, the API server will deadlock
-          # and reject all further delete requests, causing terraform destroy to fail.
-          echo "Deleting all admission webhooks to prevent teardown deadlocks..."
-          kubectl delete validatingwebhookconfigurations --all --ignore-not-found=true || true
-          kubectl delete mutatingwebhookconfigurations --all --ignore-not-found=true || true
-          
-          # Delete ArgoCD applications and patch finalizers first so it doesn't block namespace deletion
-          echo "Cleaning up ArgoCD applications..."
-          kubectl patch application deployhub-platform -n argocd --type json -p='[{"op": "remove", "path": "/metadata/finalizers"}]' || true
-          kubectl delete application --all -n argocd --ignore-not-found=true || true
-
-          # Also delete any tenant namespaces created by the controller
-          TENANT_NAMESPACES=$(kubectl get namespaces \
-            -l deployhub.jeneeldumasia.codes/tenant=true \
-            -o jsonpath='{.items[*].metadata.name}' 2>/dev/null || echo "")
-
-          ALL_NS="$APP_NAMESPACES $TENANT_NAMESPACES"
-
-          for NS in $ALL_NS; do
-            echo "Deleting namespace: $NS"
-            kubectl delete namespace "$NS" --ignore-not-found=true --wait=false || true
-          done
-
-      # Step 7: Wait for namespace termination. Namespaces with finalizers
-      # (e.g. from ArgoCD or cert-manager) can hang in Terminating state
-      # and hold resources that block Terraform.
-      - name: Wait for Namespace Termination
-        if: env.cluster_not_found != 'true'
-        run: |
-          APP_NAMESPACES="argocd deployhub-system deployhub-build observability"
-          MAX_WAIT=120
-          ELAPSED=0
-
-          while [ $ELAPSED -lt $MAX_WAIT ]; do
-            TERMINATING=$(kubectl get namespaces \
-              --field-selector status.phase=Terminating \
-              -o jsonpath='{.items[*].metadata.name}' 2>/dev/null || echo "")
-
-            if [ -z "$TERMINATING" ]; then
-              echo "All namespaces terminated."
-              break
-            fi
-
-            echo "Still terminating: $TERMINATING (${ELAPSED}s elapsed)"
-
-            # Force-remove finalizers from stuck namespaces
-            for NS in $TERMINATING; do
-              echo "Force-removing finalizers from namespace: $NS"
-              kubectl get namespace "$NS" -o json 2>/dev/null | \
-                jq '.spec.finalizers = []' | \
-                kubectl replace --raw "/api/v1/namespaces/$NS/finalize" -f - || true
-            done
-
-            sleep 10
-            ELAPSED=$((ELAPSED + 10))
-          done
-
-      # Step 8: Release any orphaned AWS Security Groups created by the
-      # AWS Load Balancer Controller that Terraform doesn't track.
-      - name: Release Orphaned Security Groups
+      # Step 5: Force Delete ALL Load Balancers in our VPC.
+      # Kubernetes auto-generates LB names (e.g. 'a96304a043ff34844875f422f978eb9a')
+      # that do NOT contain 'deployhub', so name-based search misses them.
+      # We find them by VPC ID instead — if it's in our VPC, it must go.
+      - name: Force Delete Load Balancers, ENIs, EIPs, and Security Groups
         run: |
           VPC_ID=$(aws ec2 describe-vpcs \
             --filters "Name=tag:Name,Values=deployhub-vpc" \
@@ -222,24 +115,128 @@ jobs:
             --output text 2>/dev/null || echo "")
 
           if [ -z "$VPC_ID" ] || [ "$VPC_ID" = "None" ]; then
-            echo "VPC not found, skipping security group cleanup."
-          else
-            echo "Found VPC: $VPC_ID"
-            # Find and delete SGs tagged by the load balancer controller
-            SG_IDS=$(aws ec2 describe-security-groups \
-              --filters "Name=vpc-id,Values=$VPC_ID" \
-              --query "SecurityGroups[?GroupName!='default' && (contains(GroupName, 'k8s-') || contains(GroupName, 'deployhu'))].GroupId" \
-              --output text 2>/dev/null || echo "")
+            echo "VPC not found, skipping LB/SG cleanup."
+            exit 0
+          fi
 
-            if [ -n "$SG_IDS" ]; then
-              for SG in $SG_IDS; do
-                echo "Deleting security group: $SG"
-                aws ec2 delete-security-group --group-id "$SG" 2>/dev/null || \
-                  echo "Could not delete $SG (may still have dependencies, Terraform will retry)"
-              done
-            else
-              echo "No orphaned security groups found."
+          echo "Found VPC: $VPC_ID"
+
+          # --- Delete ALL load balancers in this VPC ---
+          echo "=== Finding ALL load balancers in VPC $VPC_ID ==="
+          ALL_LB_ARNS=$(aws elbv2 describe-load-balancers \
+            --query "LoadBalancers[?VpcId=='$VPC_ID'].LoadBalancerArn" \
+            --output text 2>/dev/null || echo "")
+
+          if [ -n "$ALL_LB_ARNS" ]; then
+            for ARN in $ALL_LB_ARNS; do
+              echo "Deleting load balancer: $ARN"
+              aws elbv2 delete-load-balancer --load-balancer-arn "$ARN" 2>/dev/null || true
+            done
+
+            echo "Waiting for load balancers to fully deprovision..."
+            MAX_WAIT=180
+            ELAPSED=0
+            while [ $ELAPSED -lt $MAX_WAIT ]; do
+              REMAINING=$(aws elbv2 describe-load-balancers \
+                --query "LoadBalancers[?VpcId=='$VPC_ID'].LoadBalancerArn" \
+                --output text 2>/dev/null || echo "")
+              if [ -z "$REMAINING" ]; then
+                echo "All load balancers deprovisioned."
+                break
+              fi
+              echo "Still waiting for LBs to deprovision... (${ELAPSED}s/${MAX_WAIT}s)"
+              sleep 15
+              ELAPSED=$((ELAPSED + 15))
+            done
+          else
+            echo "No load balancers found in VPC."
+          fi
+
+          # --- Delete orphaned Target Groups in this VPC ---
+          echo "=== Cleaning up orphaned Target Groups ==="
+          TG_ARNS=$(aws elbv2 describe-target-groups \
+            --query "TargetGroups[?VpcId=='$VPC_ID'].TargetGroupArn" \
+            --output text 2>/dev/null || echo "")
+
+          for TG in $TG_ARNS; do
+            echo "Deleting target group: $TG"
+            aws elbv2 delete-target-group --target-group-arn "$TG" 2>/dev/null || true
+          done
+
+          # --- Release Elastic IPs associated with this VPC ---
+          # NLBs provision EIPs in public subnets. If these aren't released,
+          # the internet gateway can't detach and the VPC can't be deleted.
+          echo "=== Releasing Elastic IPs ==="
+          SUBNET_IDS=$(aws ec2 describe-subnets \
+            --filters "Name=vpc-id,Values=$VPC_ID" \
+            --query "Subnets[*].SubnetId" \
+            --output text 2>/dev/null || echo "")
+
+          # Find EIPs associated with ENIs in our VPC
+          EIP_ALLOCS=$(aws ec2 describe-addresses \
+            --query "Addresses[?Domain=='vpc'].{AllocationId:AllocationId,AssociationId:AssociationId,NetworkInterfaceId:NetworkInterfaceId}" \
+            --output json 2>/dev/null || echo "[]")
+
+          # Get all ENIs in our VPC to cross-reference
+          VPC_ENI_IDS=$(aws ec2 describe-network-interfaces \
+            --filters "Name=vpc-id,Values=$VPC_ID" \
+            --query "NetworkInterfaces[*].NetworkInterfaceId" \
+            --output text 2>/dev/null || echo "")
+
+          echo "$EIP_ALLOCS" | jq -r '.[] | "\(.AllocationId) \(.AssociationId) \(.NetworkInterfaceId)"' 2>/dev/null | while read ALLOC ASSOC ENI; do
+            if echo "$VPC_ENI_IDS" | grep -qw "$ENI" 2>/dev/null; then
+              if [ "$ASSOC" != "null" ] && [ -n "$ASSOC" ]; then
+                echo "Disassociating EIP: $ALLOC (association: $ASSOC)"
+                aws ec2 disassociate-address --association-id "$ASSOC" 2>/dev/null || true
+              fi
+              echo "Releasing EIP: $ALLOC"
+              aws ec2 release-address --allocation-id "$ALLOC" 2>/dev/null || true
             fi
+          done
+
+          # --- Force-detach and delete orphaned ENIs ---
+          echo "=== Cleaning up orphaned ENIs ==="
+          ENIS=$(aws ec2 describe-network-interfaces \
+            --filters "Name=vpc-id,Values=$VPC_ID" \
+            --query "NetworkInterfaces[?Status=='available' || contains(Description, 'ELB')].{ID:NetworkInterfaceId,AttachId:Attachment.AttachmentId,Status:Status}" \
+            --output json 2>/dev/null || echo "[]")
+
+          echo "$ENIS" | jq -r '.[] | "\(.ID) \(.AttachId) \(.Status)"' 2>/dev/null | while read ENI_ID ATTACH_ID STATUS; do
+            if [ "$STATUS" = "in-use" ] && [ "$ATTACH_ID" != "null" ] && [ -n "$ATTACH_ID" ]; then
+              echo "Force-detaching ENI: $ENI_ID"
+              aws ec2 detach-network-interface --attachment-id "$ATTACH_ID" --force 2>/dev/null || true
+              sleep 5
+            fi
+            echo "Deleting ENI: $ENI_ID"
+            aws ec2 delete-network-interface --network-interface-id "$ENI_ID" 2>/dev/null || true
+          done
+
+          # --- Delete orphaned Security Groups ---
+          echo "=== Cleaning up orphaned Security Groups ==="
+          # Wait a moment for ENI deletions to propagate
+          sleep 10
+          SG_IDS=$(aws ec2 describe-security-groups \
+            --filters "Name=vpc-id,Values=$VPC_ID" \
+            --query "SecurityGroups[?GroupName!='default'].GroupId" \
+            --output text 2>/dev/null || echo "")
+
+          if [ -n "$SG_IDS" ]; then
+            # First, remove all ingress/egress rules that reference other SGs (breaks circular deps)
+            for SG in $SG_IDS; do
+              echo "Revoking all rules from SG: $SG"
+              aws ec2 revoke-security-group-ingress --group-id "$SG" \
+                --ip-permissions "$(aws ec2 describe-security-groups --group-ids "$SG" --query 'SecurityGroups[0].IpPermissions' --output json 2>/dev/null)" 2>/dev/null || true
+              aws ec2 revoke-security-group-egress --group-id "$SG" \
+                --ip-permissions "$(aws ec2 describe-security-groups --group-ids "$SG" --query 'SecurityGroups[0].IpPermissionsEgress' --output json 2>/dev/null)" 2>/dev/null || true
+            done
+            # Then delete them
+            for SG in $SG_IDS; do
+              echo "Deleting security group: $SG"
+              aws ec2 delete-security-group --group-id "$SG" 2>/dev/null || \
+                echo "Could not delete $SG (may still have dependencies)"
+            done
+          else
+            echo "No orphaned security groups found."
           fi
 
       # Step 8.5: Force Uninstall Problematic Helm Releases
@@ -264,6 +261,8 @@ jobs:
       # Terraform should be able to cleanly destroy EKS, the VPC, and S3.
       - name: Terraform Destroy
         working-directory: ./terraform
+        env:
+          TF_VAR_cloudflare_api_token: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         run: terraform destroy -auto-approve
 
       # Step 10: Final sanity check — confirm the VPC is gone.
