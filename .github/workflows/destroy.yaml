@@ -86,6 +86,9 @@ jobs:
           # Delete gateway HTTPRoutes (tenant workload routes)
           kubectl delete httproute --all --all-namespaces --ignore-not-found=true || true
 
+          # Delete ingress resources (these provision AWS ALBs)
+          kubectl delete ingress --all --all-namespaces --ignore-not-found=true || true
+
           # Delete only LoadBalancer-type services (these provision AWS NLBs)
           # We do NOT delete all services — ClusterIP services are fine to leave for Terraform
           kubectl get svc --all-namespaces -o json | \
@@ -107,7 +110,7 @@ jobs:
 
           while [ $ELAPSED -lt $MAX_WAIT ]; do
             LB_COUNT=$(aws elbv2 describe-load-balancers \
-              --query "LoadBalancers[?contains(LoadBalancerName, 'deployhub') || Tags[?Key=='$CLUSTER_TAG']].LoadBalancerArn" \
+              --query "LoadBalancers[?contains(LoadBalancerName, 'deployhu') || Tags[?Key=='$CLUSTER_TAG'] || Tags[?Key=='elbv2.k8s.aws/cluster']].LoadBalancerArn" \
               --output text 2>/dev/null | wc -w || echo "0")
 
             # Also check classic ELBs
@@ -236,6 +239,8 @@ jobs:
           echo "Force uninstalling Kyverno without hooks..."
           helm uninstall kyverno-policies -n kyverno --no-hooks --ignore-not-found || true
           helm uninstall kyverno -n kyverno --no-hooks --ignore-not-found || true
+          echo "Force uninstalling KEDA without hooks..."
+          helm uninstall keda -n keda --no-hooks --ignore-not-found || true
 
       # Step 9: Full Terraform destroy. By this point:
       # - Karpenter nodes are gone (ENIs released)
