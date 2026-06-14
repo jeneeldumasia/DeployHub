@@ -241,7 +241,7 @@ resource "aws_secretsmanager_secret_version" "ecr_pull_token" {
 # ── Cloudflare API Token Secret ───────────────────────────────────────────────
 # Used by External Secrets Operator to inject Cloudflare credentials for Cert-Manager
 resource "aws_secretsmanager_secret" "cloudflare_api_token" {
-  name                    = "deployhub/cloudflare"
+  name                    = "deployhub/cloudflare-api-token"
   recovery_window_in_days = 0
 }
 

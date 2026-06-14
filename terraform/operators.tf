@@ -185,7 +185,7 @@ resource "helm_release" "envoy_gateway" {
   namespace        = "envoy-gateway-system"
   create_namespace = true
 
-  depends_on = [module.eks, null_resource.gateway_api_crds]
+  depends_on = [module.eks, null_resource.gateway_api_crds, time_sleep.wait_for_alb_webhook]
 }
 
 
