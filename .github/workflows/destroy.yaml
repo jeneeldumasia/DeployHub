@@ -103,34 +103,31 @@ jobs:
               kubectl delete svc "$NAME" -n "$NS" --ignore-not-found=true || true
             done
 
-      # Step 5: Wait for all AWS Load Balancers to fully deprovision.
-      # AWS takes 60-90 seconds to delete NLB/ELB instances and release ENIs.
-      # Without this wait, Terraform fails with dependency violations on the VPC.
-      - name: Wait for Load Balancers to Deprovision
+      # Step 5: Force Delete and Wait for Load Balancers.
+      # If the cluster was already destroyed, the ALB controller is dead and cannot
+      # clean up ALBs. We must manually delete them and their target groups.
+      - name: Force Delete and Wait for Load Balancers
         run: |
-          echo "Waiting for AWS Load Balancers to fully deprovision..."
+          echo "Finding and deleting any remaining AWS Load Balancers..."
           MAX_WAIT=180
           ELAPSED=0
-          CLUSTER_TAG="kubernetes.io/cluster/deployhub-cluster"
 
           while [ $ELAPSED -lt $MAX_WAIT ]; do
-            LB_COUNT=$(aws elbv2 describe-load-balancers \
+            ALB_ARNS=$(aws elbv2 describe-load-balancers \
               --query "LoadBalancers[?contains(LoadBalancerName, 'deployhu') || contains(LoadBalancerName, 'deployhub')].LoadBalancerArn" \
-              --output text 2>/dev/null | wc -w || echo "0")
+              --output text 2>/dev/null || echo "")
 
-            # Also check classic ELBs
-            CLB_COUNT=$(aws elb describe-load-balancers \
-              --query "LoadBalancerDescriptions[].LoadBalancerName" \
-              --output text 2>/dev/null | wc -w || echo "0")
-
-            TOTAL=$((LB_COUNT + CLB_COUNT))
-            echo "Load balancers still active: $TOTAL (${ELAPSED}s elapsed)"
-
-            if [ "$TOTAL" -eq 0 ]; then
+            if [ -z "$ALB_ARNS" ]; then
               echo "All load balancers deprovisioned."
               break
             fi
 
+            for ARN in $ALB_ARNS; do
+              echo "Force deleting ALB: $ARN"
+              aws elbv2 delete-load-balancer --load-balancer-arn "$ARN" 2>/dev/null || true
+            done
+
+            echo "Load balancers still active. Waiting... (${ELAPSED}s elapsed)"
             sleep 15
             ELAPSED=$((ELAPSED + 15))
           done
@@ -138,6 +135,16 @@ jobs:
           if [ $ELAPSED -ge $MAX_WAIT ]; then
             echo "WARNING: Load balancers may still be active after ${MAX_WAIT}s. Proceeding anyway."
           fi
+
+          echo "Cleaning up any orphaned Target Groups..."
+          TG_ARNS=$(aws elbv2 describe-target-groups \
+            --query "TargetGroups[?contains(TargetGroupName, 'k8s-') || contains(TargetGroupName, 'deployhu')].TargetGroupArn" \
+            --output text 2>/dev/null || echo "")
+            
+          for TG in $TG_ARNS; do
+            echo "Deleting orphaned Target Group: $TG"
+            aws elbv2 delete-target-group --target-group-arn "$TG" 2>/dev/null || true
+          done
 
       # Step 6: Delete Application Namespaces
       # Deleting system namespaces causes the EKS control plane to report errors
