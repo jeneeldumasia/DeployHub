@@ -120,7 +120,8 @@ jobs:
           MAX_WAIT=300
           NLB_URL=""
           while [ $ELAPSED -lt $MAX_WAIT ]; do
-            NLB_URL=$(kubectl get svc -n envoy-gateway-system envoy-deployhub-system-deployhub-gateway -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null || echo "")
+            # Scan all namespaces for the LoadBalancer service instead of hardcoding the dynamically generated name
+            NLB_URL=$(kubectl get svc -A -o jsonpath="{.items[?(@.spec.type=='LoadBalancer')].status.loadBalancer.ingress[0].hostname}" 2>/dev/null | awk '{print $1}')
             if [ -n "$NLB_URL" ]; then
               echo "NLB is ready: $NLB_URL"
               break
