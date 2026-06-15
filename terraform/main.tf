@@ -413,25 +413,4 @@ module "karpenter" {
   }
 }
 
-provider "cloudflare" {
-  api_token = var.cloudflare_api_token
-}
 
-data "cloudflare_zone" "deployhub" {
-  name = "deployhub.jeneeldumasia.codes"
-}
-
-data "kubernetes_service" "gateway" {
-  metadata {
-    name      = "envoy-deployhub-system-deployhub-gateway"
-    namespace = "envoy-gateway-system"
-  }
-}
-
-resource "cloudflare_record" "wildcard" {
-  zone_id = data.cloudflare_zone.deployhub.id
-  name    = "*"
-  value   = data.kubernetes_service.gateway.status[0].load_balancer[0].ingress[0].hostname
-  type    = "CNAME"
-  proxied = false
-}
