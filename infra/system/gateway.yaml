@@ -1,9 +1,9 @@
 apiVersion: gateway.networking.k8s.io/v1
 kind: GatewayClass
 metadata:
-  name: alb
+  name: envoy-gateway
 spec:
-  controllerName: gateway.k8s.aws/alb
+  controllerName: gateway.envoyproxy.io/gatewayclass-controller
 ---
 apiVersion: gateway.networking.k8s.io/v1
 kind: Gateway
@@ -11,10 +11,13 @@ metadata:
   name: deployhub-gateway
   namespace: deployhub-system
   annotations:
-    # Tell the controller to make this an internet-facing ALB
-    application-networking.k8s.aws/scheme: "internet-facing"
+    # AWS ALB will target this Gateway service
+    # Do NOT use NodePort; use LoadBalancer or ClusterIP (if ALB Ingress Controller supports it)
+    service.beta.kubernetes.io/aws-load-balancer-type: "external"
+    service.beta.kubernetes.io/aws-load-balancer-nlb-target-type: "ip"
+    service.beta.kubernetes.io/aws-load-balancer-scheme: "internet-facing"
 spec:
-  gatewayClassName: alb
+  gatewayClassName: envoy-gateway
   listeners:
     - name: http
       protocol: HTTP
@@ -22,3 +25,40 @@ spec:
       allowedRoutes:
         namespaces:
           from: All
+      # Fix #15: redirect all HTTP traffic to HTTPS.
+      # Envoy Gateway implements this via an HTTPRoute filter attached to the
+      # listener. The HTTPRoute below (deployhub-http-redirect) handles the
+      # actual redirect; this listener just needs to accept routes from all
+      # namespaces so the redirect route can bind to it.
+    - name: https
+      protocol: HTTPS
+      port: 443
+      hostname: "*.deployhub.jeneeldumasia.codes"
+      tls:
+        mode: Terminate
+        certificateRefs:
+          - name: deployhub-tls-cert
+      allowedRoutes:
+        namespaces:
+          from: All
+---
+# Fix #15: catch-all HTTPRoute on port 80 that issues a 301 redirect to HTTPS.
+# Attach this to the http listener so all tenant traffic is upgraded.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: deployhub-http-redirect
+  namespace: deployhub-system
+spec:
+  parentRefs:
+    - name: deployhub-gateway
+      namespace: deployhub-system
+      sectionName: http
+  hostnames:
+    - "*.deployhub.jeneeldumasia.codes"
+  rules:
+    - filters:
+        - type: RequestRedirect
+          requestRedirect:
+            scheme: https
+            statusCode: 301
