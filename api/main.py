@@ -75,10 +75,11 @@ def _user_id_or_ip(request: Request) -> str:
     if auth_header and auth_header.startswith("Bearer "):
         try:
             token = auth_header.split(" ")[1]
-            from auth import get_current_user # imported here to avoid circular dep if needed
+            import jwt
             # For rate limiting, it's cheaper to just decode without full validation
-            # but getting the IP is safer if we don't want to parse JWT.
-            # We'll just rely on the full auth if we really want to, but get_remote_address is fine for a mix.
+            payload = jwt.decode(token, options={"verify_signature": False})
+            if "sub" in payload:
+                return payload["sub"]
         except Exception:
             pass
     return get_remote_address(request)
@@ -99,8 +100,8 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=_UI_ORIGINS,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type"],
 )
 
 # ── Request / Response models ─────────────────────────────────────────────────

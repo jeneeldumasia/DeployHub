@@ -26,7 +26,7 @@ resource "helm_release" "kyverno_policies" {
 
   set {
     name  = "validationFailureAction"
-    value = "Audit"
+    value = "Enforce"
   }
 
   depends_on = [helm_release.kyverno]

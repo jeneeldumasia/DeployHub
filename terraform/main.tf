@@ -243,17 +243,7 @@ resource "kubernetes_service_account" "builder_sa" {
   automount_service_account_token = false
 }
 
-# ── ECR Pull Token Secret ─────────────────────────────────────────────────────
-# Used by External Secrets Operator to inject ECR pull credentials into namespaces
-resource "aws_secretsmanager_secret" "ecr_pull_token" {
-  name                    = "deployhub/ecr-pull-token"
-  recovery_window_in_days = 0  # Immediate deletion on destroy
-}
-
-resource "aws_secretsmanager_secret_version" "ecr_pull_token" {
-  secret_id     = aws_secretsmanager_secret.ecr_pull_token.id
-  secret_string = "placeholder"  # Will be rotated by an external cronjob/lambda
-}
+# Removed ecr-pull-token secret, using ESO ECRAuthorizationToken generator instead
 
 # ── Cloudflare API Token Secret ───────────────────────────────────────────────
 # Used by External Secrets Operator to inject Cloudflare credentials for Cert-Manager

@@ -12,6 +12,13 @@ deployhub_reconciliation_duration_seconds = Summary(
     'Time spent in the reconciliation loop'
 )
 
+# Fix #19: Counter resets on restart, but we will use PromQL increase() 
+# or rate() to measure success rate over time instead of relying on absolute value.
+deployhub_deployment_success_total = Counter(
+    'deployhub_deployment_success_total',
+    'Total number of successful deployments transitioned to Running'
+)
+
 def start_metrics_server(port: int = 9090):
     # Fix: was 8080, which collides with the controller's own app port.
     # Metrics now bind on 9090.
