@@ -276,10 +276,12 @@ def create_deployment(request: Request, project_id: str, body: CreateDeploymentR
     # Format: <ecr_repo_url>:<deployment_id>
     # deployment_id as tag gives a unique, traceable, immutable image per deploy.
     if ECR_REPOSITORY_URL:
-        image_uri = f"{ECR_REPOSITORY_URL}:{deployment_id}"
+        # Base registry e.g. 123456789012.dkr.ecr.region.amazonaws.com
+        base_registry = ECR_REPOSITORY_URL.split("/")[0]
+        image_uri = f"{base_registry}/deployhub-builds/{project_id}:{deployment_id}"
     else:
         # Local dev / testing fallback — no ECR configured
-        image_uri = f"local/deployhub-builds:{deployment_id}"
+        image_uri = f"local/deployhub-builds/{project_id}:{deployment_id}"
 
     try:
         with get_connection() as conn:
@@ -311,6 +313,7 @@ def create_deployment(request: Request, project_id: str, body: CreateDeploymentR
             "deployment_id": deployment_id,
             "project_id":    project_id,
             "repo_url":      body.repo_url,
+            "branch":        body.branch,
             "image_name":    image_uri,
             "queued_at":     queued_at,
             "retries":       "0",
@@ -346,12 +349,12 @@ def list_deployments(
     request: Request,
     project_id: str,
     limit: int = Query(default=20, ge=1, le=100),
-    cursor: Optional[str] = Query(default=None, description="updated_at cursor for keyset pagination"),
+    cursor: Optional[str] = Query(default=None, description="cursor format: <updated_at>|<deployment_id>"),
     current_user: User = Depends(get_current_user),
 ):
     """
     List deployments for a project with keyset pagination.
-    Pass the `updated_at` value of the last item as `cursor` to get the next page.
+    Pass the `<updated_at>|<deployment_id>` value of the last item as `cursor` to get the next page.
     """
     _get_project_or_404(project_id, current_user)
 
@@ -363,10 +366,14 @@ def list_deployments(
     params = [project_id]
 
     if cursor:
-        query += " AND updated_at < %s"
-        params.append(cursor)
+        try:
+            cursor_updated_at, cursor_deployment_id = cursor.split("|", 1)
+            query += " AND (updated_at, deployment_id) < (%s, %s)"
+            params.extend([cursor_updated_at, cursor_deployment_id])
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid cursor format")
 
-    query += " ORDER BY updated_at DESC LIMIT %s;"
+    query += " ORDER BY updated_at DESC, deployment_id DESC LIMIT %s;"
     params.append(limit)
 
     try:
@@ -400,19 +407,22 @@ async def websocket_deployment_status(websocket: WebSocket, project_id: str, dep
         return
     
     await websocket.accept()
+    
+    def fetch_status():
+        with get_connection() as conn:
+            with conn.cursor(cursor_factory=DictCursor) as cur:
+                cur.execute(
+                    "SELECT state, last_error FROM deployments WHERE deployment_id = %s AND project_id = %s;",
+                    (deployment_id, project_id),
+                )
+                return cur.fetchone()
+
     try:
         last_state = None
         while True:
-            # Using asyncio.sleep to poll the DB every second.
             import asyncio
             try:
-                with get_connection() as conn:
-                    with conn.cursor(cursor_factory=DictCursor) as cur:
-                        cur.execute(
-                            "SELECT state, last_error FROM deployments WHERE deployment_id = %s AND project_id = %s;",
-                            (deployment_id, project_id),
-                        )
-                        row = cur.fetchone()
+                row = await asyncio.to_thread(fetch_status)
                 
                 if row:
                     current_state = row['state']
@@ -705,17 +715,35 @@ async def github_webhook(request: Request, project_id: str):
         
     deployment_id = str(uuid.uuid4())
     queued_at = str(time.time())
-    image_uri = f"{ECR_REPOSITORY_URL}:{deployment_id}" if ECR_REPOSITORY_URL else f"local/deployhub-builds:{deployment_id}"
+    if ECR_REPOSITORY_URL:
+        base_registry = ECR_REPOSITORY_URL.split("/")[0]
+        image_uri = f"{base_registry}/deployhub-builds/{project_id}:{deployment_id}"
+    else:
+        image_uri = f"local/deployhub-builds/{project_id}:{deployment_id}"
     
     try:
         with get_connection() as conn:
             with conn.cursor(cursor_factory=DictCursor) as cur:
                 cur.execute(
+                    "SELECT repo_url, port FROM deployments WHERE project_id = %s ORDER BY updated_at DESC LIMIT 1;",
+                    (project_id,)
+                )
+                last_deploy = cur.fetchone()
+                
+                if not last_deploy:
+                    raise HTTPException(status_code=400, detail="Project has no existing deployments to inherit configuration from")
+                
+                if last_deploy["repo_url"] != repo_url:
+                    raise HTTPException(status_code=403, detail="Webhook repository does not match project's repository")
+                    
+                port = last_deploy["port"]
+
+                cur.execute(
                     """
                     INSERT INTO deployments (deployment_id, project_id, repo_url, image_uri, replicas, port, state)
                     VALUES (%s, %s, %s, %s, %s, %s, 'Queued')
                     """,
-                    (deployment_id, project_id, repo_url, image_uri, 1, 8080)
+                    (deployment_id, project_id, repo_url, image_uri, 1, port)
                 )
             conn.commit()
             
@@ -724,6 +752,7 @@ async def github_webhook(request: Request, project_id: str):
             "deployment_id": deployment_id,
             "project_id":    project_id,
             "repo_url":      repo_url,
+            "branch":        branch,
             "image_name":    image_uri,
             "queued_at":     queued_at,
             "retries":       "0",

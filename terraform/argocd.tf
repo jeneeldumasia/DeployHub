@@ -41,7 +41,7 @@ spec:
     path: infra
   destination:
     server: https://kubernetes.default.svc
-    namespace: default
+    namespace: deployhub-system
   syncPolicy:
     automated:
       prune: true

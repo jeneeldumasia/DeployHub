@@ -16,7 +16,7 @@ spec:
   dataFrom:
     - extract:
         # Assumes secrets in AWS SM are stored under a path scoped to the tenant/project
-        key: deployhub/{{ project_name }}/{{ deployment_name }}
+        key: deployhub/{{ project_name }}/
 ---
 apiVersion: apps/v1
 kind: Deployment

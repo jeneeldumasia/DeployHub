@@ -111,16 +111,16 @@ def validate_message(deployment_id, repo_url, image_name):
         )
 
 
-def run_build(deployment_id: str, repo_url: str, image_name: str):
+def run_build(deployment_id: str, repo_url: str, branch: str, image_name: str):
     workspace = f"/workspace/{deployment_id}"
     os.makedirs(workspace, exist_ok=True)
 
     try:
         # Fix #3.1: git clone failure now records a failed build entry so
         # post-mortem debugging is possible even when the build never started.
-        logger.info(f"Cloning {repo_url} into {workspace}")
+        logger.info(f"Cloning {repo_url} (branch: {branch}) into {workspace}")
         try:
-            subprocess.run(["git", "clone", "--depth=1", repo_url, workspace], check=True)
+            subprocess.run(["git", "clone", "--depth=1", "--branch", branch, repo_url, workspace], check=True)
         except subprocess.CalledProcessError as e:
             record_build(deployment_id, f"logs/{deployment_id}/build.log", "Failed")
             update_db_state(deployment_id, "Failed", f"git clone failed: {e}")
@@ -163,6 +163,25 @@ def run_build(deployment_id: str, repo_url: str, image_name: str):
         # Cloud Native Buildpacks (pack) is fully rootless and handles both
         # Dockerfile-based and non-Dockerfile repos natively via its detection
         # logic — no need to check for a Dockerfile ourselves.
+        # Ensure ECR repository exists
+        if "amazonaws.com" in image_name:
+            try:
+                ecr = boto3.client('ecr')
+                registry_and_repo, _ = image_name.rsplit(':', 1)
+                repo_name = registry_and_repo.split('/', 1)[1]
+                
+                try:
+                    ecr.describe_repositories(repositoryNames=[repo_name])
+                except ecr.exceptions.RepositoryNotFoundException:
+                    logger.info(f"Creating ECR repository {repo_name}")
+                    ecr.create_repository(
+                        repositoryName=repo_name,
+                        imageScanningConfiguration={'scanOnPush': True},
+                        imageTagMutability='IMMUTABLE'
+                    )
+            except Exception as e:
+                logger.error(f"Failed to ensure ECR repository exists: {e}")
+
         logger.info("Using Cloud Native Buildpacks (pack --publish).")
         cmd = [
             "pack", "build", image_name,
@@ -256,11 +275,31 @@ def run_build(deployment_id: str, repo_url: str, image_name: str):
             subprocess.run(["rm", "-rf", workspace])
 
 
+def recover_pending_messages():
+    """Pending Message Recovery via XPENDING + XCLAIM."""
+    timeout_ms = (int(os.getenv("BUILD_TIMEOUT_SECONDS", "600")) + 60) * 1000
+    try:
+        pending = r.xpending_range(BUILDER_QUEUE, CONSUMER_GROUP, '-', '+', 100)
+        for msg in pending:
+            message_id = msg['message_id']
+            consumer = msg['consumer']
+            idle_time = msg['time_since_delivered']
+
+            if idle_time > timeout_ms:
+                logger.info(f"Recovering pending message {message_id} from {consumer}")
+                r.xclaim(
+                    BUILDER_QUEUE, CONSUMER_GROUP, CONSUMER_NAME,
+                    timeout_ms, [message_id]
+                )
+    except Exception as e:
+        logger.error(f"Error recovering pending messages: {e}")
+
 def main():
     start_http_server(8001)
     logger.info(f"Builder {CONSUMER_NAME} started. Listening on {BUILDER_QUEUE}")
     while True:
         try:
+            recover_pending_messages()
             messages = r.xreadgroup(
                 CONSUMER_GROUP, CONSUMER_NAME,
                 {BUILDER_QUEUE: '>'}, count=1, block=5000
@@ -270,13 +309,14 @@ def main():
                     for msg_id, data in msg_list:
                         deployment_id = data.get("deployment_id")
                         repo_url      = data.get("repo_url")
+                        branch        = data.get("branch", "main")
                         image_name    = data.get("image_name")
 
                         logger.info(f"Processing build task for deployment {deployment_id}")
                         try:
                             # Fix #3.2: validate before touching anything
                             validate_message(deployment_id, repo_url, image_name)
-                            run_build(deployment_id, repo_url, image_name)
+                            run_build(deployment_id, repo_url, branch, image_name)
                             r.xack(BUILDER_QUEUE, CONSUMER_GROUP, msg_id)
                         except ValueError as e:
                             # Bad message — ACK it so it doesn't loop forever,

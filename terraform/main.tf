@@ -23,6 +23,10 @@ terraform {
       source  = "gavinbunney/kubectl"
       version = ">= 1.14.0"
     }
+    cloudflare = {
+      source  = "cloudflare/cloudflare"
+      version = "~> 4.0"
+    }
   }
 }
 
@@ -174,7 +178,7 @@ provider "kubectl" {
 # Builder pushes here; tenant pods pull from here via IRSA.
 resource "aws_ecr_repository" "builds" {
   name                 = "deployhub-builds"
-  image_tag_mutability = "MUTABLE"
+  image_tag_mutability = "IMMUTABLE"
 
   image_scanning_configuration {
     scan_on_push = true
@@ -208,7 +212,8 @@ resource "aws_iam_role_policy" "builder_ecr" {
       { Effect = "Allow", Action = ["ecr:GetAuthorizationToken"], Resource = "*" },
       { Effect = "Allow", Action = ["ecr:BatchCheckLayerAvailability","ecr:PutImage",
         "ecr:InitiateLayerUpload","ecr:UploadLayerPart","ecr:CompleteLayerUpload",
-        "ecr:DescribeImageScanFindings"], Resource = aws_ecr_repository.builds.arn }
+        "ecr:DescribeImageScanFindings", "ecr:CreateRepository", "ecr:DescribeRepositories"],
+        Resource = [aws_ecr_repository.builds.arn, "${aws_ecr_repository.builds.arn}/*"] }
     ]
   })
 }
@@ -416,4 +421,25 @@ module "karpenter" {
   }
 }
 
+provider "cloudflare" {
+  api_token = var.cloudflare_api_token
+}
 
+data "cloudflare_zone" "deployhub" {
+  name = "deployhub.jeneeldumasia.codes"
+}
+
+data "kubernetes_service" "gateway" {
+  metadata {
+    name      = "envoy-deployhub-system-deployhub-gateway"
+    namespace = "envoy-gateway-system"
+  }
+}
+
+resource "cloudflare_record" "wildcard" {
+  zone_id = data.cloudflare_zone.deployhub.id
+  name    = "*"
+  value   = data.kubernetes_service.gateway.status[0].load_balancer[0].ingress[0].hostname
+  type    = "CNAME"
+  proxied = false
+}

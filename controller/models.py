@@ -7,6 +7,7 @@ class ProjectStatus(str, Enum):
     PROVISIONING = "Provisioning"
     READY = "Ready"
     TERMINATING = "Terminating"
+    FAILED = "Failed"
 
 class ProjectSchema(BaseModel):
     id: str = Field(alias="_id")

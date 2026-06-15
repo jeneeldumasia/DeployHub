@@ -75,6 +75,7 @@ spec:
               - 10.0.0.0/8      # Typical Cluster VPC/Pod CIDR
               - 172.16.0.0/12
               - 192.168.0.0/16
+              - 100.64.0.0/10   # Carrier-grade NAT / EKS VPC CNI secondary ranges
               - 169.254.169.254/32 # Block IMDS explicitly as requested
 ---
 apiVersion: rbac.authorization.k8s.io/v1

@@ -62,13 +62,14 @@ class StateMachine:
         conn = self._get_conn()
         with conn.cursor() as cur:
             cur.execute("""
-                INSERT INTO deployments (deployment_id, state, updated_at, last_error)
-                VALUES (%s, %s, %s, %s)
-                ON CONFLICT (deployment_id) DO UPDATE
-                SET state       = EXCLUDED.state,
-                    updated_at  = EXCLUDED.updated_at,
-                    last_error  = EXCLUDED.last_error;
-            """, (deployment_id, new_state, datetime.utcnow(), error_msg))
+                UPDATE deployments
+                SET state       = %s,
+                    updated_at  = %s,
+                    last_error  = %s
+                WHERE deployment_id = %s;
+            """, (new_state, datetime.utcnow(), error_msg, deployment_id))
+            if cur.rowcount == 0:
+                logger.warning(f"Deployment {deployment_id} not found in DB when transitioning to {new_state}")
         # Fix #24: was print(), now uses structured logger
         logger.info(f"Deployment {deployment_id} transition -> {new_state}")
 

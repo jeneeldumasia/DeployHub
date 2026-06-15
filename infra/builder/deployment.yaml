@@ -67,3 +67,20 @@ spec:
                   key: bucket_name
             - name: CONSUMER_GROUP
               value: "builder_group"
+          ports:
+            - name: metrics
+              containerPort: 8001
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 8001
+            initialDelaySeconds: 15
+            periodSeconds: 20
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 8001
+            initialDelaySeconds: 10
+            periodSeconds: 10

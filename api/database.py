@@ -12,8 +12,43 @@ if not DATABASE_URL:
     raise RuntimeError("DATABASE_URL environment variable is not set")
 
 
+from psycopg2.pool import ThreadedConnectionPool
+
+db_pool = ThreadedConnectionPool(1, 20, dsn=DATABASE_URL)
+
+class PooledConnectionWrapper:
+    def __init__(self, conn, pool):
+        self._conn = conn
+        self._pool = pool
+
+    def __enter__(self):
+        self._conn.__enter__()
+        return self._conn
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        try:
+            self._conn.__exit__(exc_type, exc_val, exc_tb)
+        finally:
+            self._pool.putconn(self._conn)
+            self._conn = None # Prevent double put
+
+    def cursor(self, *args, **kwargs):
+        return self._conn.cursor(*args, **kwargs)
+
+    def commit(self):
+        self._conn.commit()
+
+    def rollback(self):
+        self._conn.rollback()
+
+    def close(self):
+        if self._conn:
+            self._pool.putconn(self._conn)
+            self._conn = None
+
 def get_connection():
-    return psycopg2.connect(DATABASE_URL)
+    conn = db_pool.getconn()
+    return PooledConnectionWrapper(conn, db_pool)
 
 
 def get_deployments_paginated(project_id: str, limit: int = 20, cursor_updated_at: str = None):

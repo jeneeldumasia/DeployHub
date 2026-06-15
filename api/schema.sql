@@ -29,6 +29,7 @@ CREATE TABLE IF NOT EXISTS deployments (
     port INT DEFAULT 8080,
     health_check_path VARCHAR(255) DEFAULT '/',
     state VARCHAR(50) NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
     last_error TEXT
 );

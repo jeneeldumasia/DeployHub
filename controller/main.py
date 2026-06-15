@@ -35,7 +35,7 @@ DATABASE_URL = os.environ.get("DATABASE_URL")
 if not DATABASE_URL:
     raise RuntimeError("DATABASE_URL environment variable is not set")
 
-RECONCILIATION_INTERVAL = int(os.getenv("RECONCILIATION_INTERVAL", "60"))
+RECONCILIATION_INTERVAL = int(os.getenv("RECONCILIATION_INTERVAL", "15"))
 
 # ECR registry hostname — used when rendering the tenant namespace template
 # so each tenant namespace gets an ECR pull secret via ESO.
@@ -88,9 +88,8 @@ def _wait_for_schema(max_attempts: int = 30, delay: int = 10):
 
 def apply_manifests(manifest_str: str):
     """
-    Fix #1: was writing to /tmp and calling a commented-out os.system().
-    Now parses the multi-document YAML and applies each document via the
-    kubernetes Python client — no shell, no kubectl binary required.
+    Parses the multi-document YAML and applies each document via the
+    kubernetes Python client. If the resource already exists, it is patched.
     """
     logger.info("Applying K8s manifests via Python client...")
     docs = list(yaml.safe_load_all(manifest_str))
@@ -100,9 +99,46 @@ def apply_manifests(manifest_str: str):
         try:
             create_from_yaml(k8s_client, yaml_objects=[doc], verbose=False)
             logger.info(f"Applied: {doc.get('kind', 'unknown')} / {doc.get('metadata', {}).get('name', 'unknown')}")
+        except ApiException as e:
+            if e.status == 409:
+                kind = doc.get("kind")
+                name = doc.get("metadata", {}).get("name")
+                namespace = doc.get("metadata", {}).get("namespace", "default")
+                try:
+                    if kind == "Deployment":
+                        k8s_apps_api.patch_namespaced_deployment(name, namespace, doc)
+                    elif kind == "Service":
+                        k8s_core_api.patch_namespaced_service(name, namespace, doc)
+                    elif kind == "HTTPRoute":
+                        k8s_custom_api.patch_namespaced_custom_object(
+                            "gateway.networking.k8s.io", "v1", namespace, "httproutes", name, doc)
+                    elif kind == "ExternalSecret":
+                        k8s_custom_api.patch_namespaced_custom_object(
+                            "external-secrets.io", "v1", namespace, "externalsecrets", name, doc)
+                    elif kind == "PodDisruptionBudget":
+                        client.PolicyV1Api().patch_namespaced_pod_disruption_budget(name, namespace, doc)
+                    elif kind == "NetworkPolicy":
+                        client.NetworkingV1Api().patch_namespaced_network_policy(name, namespace, doc)
+                    elif kind == "ResourceQuota":
+                        k8s_core_api.patch_namespaced_resource_quota(name, namespace, doc)
+                    elif kind == "LimitRange":
+                        k8s_core_api.patch_namespaced_limit_range(name, namespace, doc)
+                    elif kind == "Role":
+                        client.RbacAuthorizationV1Api().patch_namespaced_role(name, namespace, doc)
+                    elif kind == "RoleBinding":
+                        client.RbacAuthorizationV1Api().patch_namespaced_role_binding(name, namespace, doc)
+                    else:
+                        logger.warning(f"Patching not implemented for {kind}")
+                        continue
+                    logger.info(f"Patched: {kind} / {name}")
+                except Exception as patch_e:
+                    logger.error(f"Failed to patch {kind} {name}: {patch_e}")
+            else:
+                logger.warning(f"apply_manifests API error for {doc.get('kind')}: {e}")
         except Exception as e:
-            # Resource may already exist (idempotent re-apply). Log and continue.
-            logger.warning(f"apply_manifests warning for {doc.get('kind')}: {e}")
+            if hasattr(e, "status") and e.status == 409:
+                logger.warning(f"Caught 409 inside generic exception for {doc.get('kind')}: {e}")
+            logger.warning(f"apply_manifests error for {doc.get('kind')}: {e}")
 
 
 def check_namespace_exists(namespace: str) -> bool:
