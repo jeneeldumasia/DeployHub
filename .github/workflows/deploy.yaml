@@ -113,6 +113,63 @@ jobs:
           kubectl rollout restart deployment cert-manager -n cert-manager
           kubectl rollout status deployment cert-manager -n cert-manager --timeout=120s
 
+      - name: Wait for Network Load Balancer
+        run: |
+          echo "Waiting for Network Load Balancer to be provisioned by AWS..."
+          ELAPSED=0
+          MAX_WAIT=300
+          NLB_URL=""
+          while [ $ELAPSED -lt $MAX_WAIT ]; do
+            NLB_URL=$(kubectl get svc -n envoy-gateway-system envoy-deployhub-system-deployhub-gateway -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null || echo "")
+            if [ -n "$NLB_URL" ]; then
+              echo "NLB is ready: $NLB_URL"
+              break
+            fi
+            echo "NLB not ready yet (${ELAPSED}s/${MAX_WAIT}s)..."
+            sleep 10
+            ELAPSED=$((ELAPSED+10))
+          done
+          if [ -z "$NLB_URL" ]; then
+            echo "Error: NLB was not provisioned in time."
+            exit 1
+          fi
+          echo "NLB_URL=$NLB_URL" >> $GITHUB_ENV
+
+      - name: Automate Cloudflare CNAME
+        run: |
+          echo "Updating Cloudflare DNS..."
+          ZONE_NAME="deployhub.jeneeldumasia.codes"
+          RECORD_NAME="*"
+          
+          # Get Zone ID
+          ZONE_ID=$(curl -s -X GET "https://api.cloudflare.com/client/v4/zones?name=$ZONE_NAME" \
+               -H "Authorization: Bearer ${{ secrets.CLOUDFLARE_API_TOKEN }}" \
+               -H "Content-Type: application/json" | jq -r '.result[0].id')
+               
+          if [ -z "$ZONE_ID" ] || [ "$ZONE_ID" == "null" ]; then
+            echo "Error: Could not retrieve Zone ID. You MUST remove IP restrictions from your Cloudflare token to allow GitHub Actions."
+            exit 1
+          fi
+
+          # Check if record exists
+          RECORD_ID=$(curl -s -X GET "https://api.cloudflare.com/client/v4/zones/$ZONE_ID/dns_records?name=*.$ZONE_NAME&type=CNAME" \
+               -H "Authorization: Bearer ${{ secrets.CLOUDFLARE_API_TOKEN }}" \
+               -H "Content-Type: application/json" | jq -r '.result[0].id')
+
+          if [ -z "$RECORD_ID" ] || [ "$RECORD_ID" == "null" ]; then
+            curl -s -X POST "https://api.cloudflare.com/client/v4/zones/$ZONE_ID/dns_records" \
+                 -H "Authorization: Bearer ${{ secrets.CLOUDFLARE_API_TOKEN }}" \
+                 -H "Content-Type: application/json" \
+                 --data '{"type":"CNAME","name":"*","content":"'${{ env.NLB_URL }}'","ttl":120,"proxied":false}'
+            echo "Created new CNAME record."
+          else
+            curl -s -X PUT "https://api.cloudflare.com/client/v4/zones/$ZONE_ID/dns_records/$RECORD_ID" \
+                 -H "Authorization: Bearer ${{ secrets.CLOUDFLARE_API_TOKEN }}" \
+                 -H "Content-Type: application/json" \
+                 --data '{"type":"CNAME","name":"*","content":"'${{ env.NLB_URL }}'","ttl":120,"proxied":false}'
+            echo "Updated existing CNAME record."
+          fi
+
       - name: Wait for TLS Certificate
         run: |
           echo "Waiting for TLS certificate to be issued..."
@@ -130,26 +187,12 @@ jobs:
           done
           if [ "$READY" != "True" ]; then
             echo "WARNING: Certificate did not become ready within ${MAX_WAIT}s."
-            echo "Checking cert-manager logs for errors:"
             kubectl logs deployment/cert-manager -n cert-manager --tail=20 | grep -i -E 'error|fail|cloudflare' || true
-            echo "Checking challenge status:"
             kubectl get challenge -n deployhub-system || true
+            exit 1
           fi
-
-      - name: Output NLB URL
-        run: |
-          # Give the load balancer a moment to be registered
-          sleep 10
-          NLB_URL=$(kubectl get svc -A -o jsonpath="{.items[?(@.spec.type=='LoadBalancer')].status.loadBalancer.ingress[0].hostname}")
-          CERT_READY=$(kubectl get certificate deployhub-tls-cert -n deployhub-system -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}' 2>/dev/null || echo "False")
-          echo "### Deployment Successful :rocket:" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Network Load Balancer (NLB):** \`$NLB_URL\`" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          if [ "$CERT_READY" = "True" ]; then
-            echo ":white_check_mark: **TLS Certificate:** Issued and active" >> $GITHUB_STEP_SUMMARY
-          else
-            echo ":warning: **TLS Certificate:** Not yet ready — check cert-manager logs" >> $GITHUB_STEP_SUMMARY
-          fi
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "Configure your Cloudflare CNAME records to point to the NLB address." >> $GITHUB_STEP_SUMMARY
+          
+          echo "### Deployment Fully Automated :rocket:" >> $GITHUB_STEP_SUMMARY
+          echo "**Network Load Balancer:** \`${{ env.NLB_URL }}\`" >> $GITHUB_STEP_SUMMARY
+          echo ":white_check_mark: **DNS Record:** Automated via Cloudflare API" >> $GITHUB_STEP_SUMMARY
+          echo ":white_check_mark: **TLS Certificate:** Issued and active" >> $GITHUB_STEP_SUMMARY
