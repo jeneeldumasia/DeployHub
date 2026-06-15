@@ -197,3 +197,5 @@ jobs:
           echo "**Network Load Balancer:** \`${{ env.NLB_URL }}\`" >> $GITHUB_STEP_SUMMARY
           echo ":white_check_mark: **DNS Record:** Automated via Cloudflare API" >> $GITHUB_STEP_SUMMARY
           echo ":white_check_mark: **TLS Certificate:** Issued and active" >> $GITHUB_STEP_SUMMARY
+
+# Force trigger pipeline
