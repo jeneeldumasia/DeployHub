@@ -117,7 +117,7 @@ jobs:
         run: |
           echo "Waiting for Network Load Balancer to be provisioned by AWS..."
           ELAPSED=0
-          MAX_WAIT=300
+          MAX_WAIT=600
           NLB_URL=""
           while [ $ELAPSED -lt $MAX_WAIT ]; do
             # Scan all namespaces for the LoadBalancer service instead of hardcoding the dynamically generated name
@@ -175,7 +175,7 @@ jobs:
         run: |
           echo "Waiting for TLS certificate to be issued..."
           ELAPSED=0
-          MAX_WAIT=300
+          MAX_WAIT=600
           while [ $ELAPSED -lt $MAX_WAIT ]; do
             READY=$(kubectl get certificate deployhub-tls-cert -n deployhub-system -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}' 2>/dev/null || echo "False")
             if [ "$READY" = "True" ]; then
