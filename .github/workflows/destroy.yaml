@@ -281,6 +281,13 @@ jobs:
       # - ArgoCD is not fighting us
       # - Kyverno is forcefully uninstalled
       # Terraform should be able to cleanly destroy EKS, the VPC, and S3.
+      - name: Cleanup Stuck Namespaces
+        if: env.cluster_not_found != 'true'
+        run: |
+          for ns in $(kubectl get ns | grep Terminating | awk '{print $1}'); do
+            echo "Force deleting stuck namespace: $ns"
+            kubectl patch ns "$ns" -p '{"metadata":{"finalizers":[]}}' --type=merge || true
+          done
       - name: Terraform Destroy
         working-directory: ./terraform
         env:
