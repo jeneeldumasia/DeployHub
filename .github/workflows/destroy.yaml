@@ -251,7 +251,7 @@ jobs:
           sleep 10
           SG_IDS=$(aws ec2 describe-security-groups \
             --filters "Name=vpc-id,Values=$VPC_ID" \
-            --query "SecurityGroups[?GroupName!='default'].GroupId" \
+            --query "SecurityGroups[?GroupName!='default' && !contains(GroupName, 'deployhub-cluster')].GroupId" \
             --output text 2>/dev/null || echo "")
 
           if [ -n "$SG_IDS" ]; then
@@ -373,7 +373,7 @@ jobs:
             # Delete SGs
             SG_IDS=$(aws ec2 describe-security-groups \
               --filters "Name=vpc-id,Values=$VPC_ID" \
-              --query "SecurityGroups[?GroupName!='default'].GroupId" \
+              --query "SecurityGroups[?GroupName!='default' && !contains(GroupName, 'deployhub-cluster')].GroupId" \
               --output text 2>/dev/null || echo "")
             for SG in $SG_IDS; do
               aws ec2 revoke-security-group-ingress --group-id "$SG" \
