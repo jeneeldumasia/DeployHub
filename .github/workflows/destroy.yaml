@@ -285,6 +285,9 @@ jobs:
           helm uninstall kyverno -n kyverno --no-hooks --ignore-not-found || true
           echo "Force uninstalling KEDA without hooks..."
           helm uninstall keda -n keda --no-hooks --ignore-not-found || true
+          echo "Deleting all validating and mutating webhooks to prevent deadlocks..."
+          kubectl delete validatingwebhookconfigurations --all --ignore-not-found=true || true
+          kubectl delete mutatingwebhookconfigurations --all --ignore-not-found=true || true
 
       # Step 9: Full Terraform destroy. By this point:
       # - Karpenter nodes are gone (ENIs released)
@@ -298,7 +301,7 @@ jobs:
         run: |
           for ns in $(kubectl get ns | grep Terminating | awk '{print $1}'); do
             echo "Force deleting stuck namespace: $ns"
-            kubectl patch ns "$ns" -p '{"metadata":{"finalizers":[]}}' --type=merge || true
+            kubectl get ns "$ns" -o json | jq '.spec.finalizers=[]' | kubectl replace --raw /api/v1/namespaces/"$ns"/finalize -f - || true
           done
       - name: Terraform Destroy
         working-directory: ./terraform
@@ -316,6 +319,12 @@ jobs:
           TF_VAR_cloudflare_api_token: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         run: |
           echo "First terraform destroy failed. Running cleanup and retrying..."
+          
+          echo "=== Sweeping for stuck namespaces from first run ==="
+          for ns in $(kubectl get ns 2>/dev/null | grep Terminating | awk '{print $1}'); do
+            echo "Force deleting stuck namespace: $ns"
+            kubectl get ns "$ns" -o json | jq '.spec.finalizers=[]' | kubectl replace --raw /api/v1/namespaces/"$ns"/finalize -f - || true
+          done
 
           VPC_ID=$(aws ec2 describe-vpcs \
             --filters "Name=tag:Name,Values=deployhub-vpc" \
