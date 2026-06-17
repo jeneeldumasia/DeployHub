@@ -1,4 +1,4 @@
-apiVersion: config.gateway.envoyproxy.io/v1alpha1
+apiVersion: gateway.envoyproxy.io/v1alpha1
 kind: EnvoyProxy
 metadata:
   name: aws-nlb-proxy
@@ -21,7 +21,7 @@ metadata:
 spec:
   controllerName: gateway.envoyproxy.io/gatewayclass-controller
   parametersRef:
-    group: config.gateway.envoyproxy.io
+    group: gateway.envoyproxy.io
     kind: EnvoyProxy
     name: aws-nlb-proxy
     namespace: deployhub-system
