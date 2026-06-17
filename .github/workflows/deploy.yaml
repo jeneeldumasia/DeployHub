@@ -141,8 +141,9 @@ jobs:
       - name: Automate Cloudflare CNAME
         run: |
           echo "Updating Cloudflare DNS..."
-          ZONE_NAME="deployhub.jeneeldumasia.codes"
-          RECORD_NAME="*"
+          ZONE_NAME="jeneeldumasia.codes"
+          RECORD_NAME="*.deployhub"
+          FULL_RECORD_NAME="*.deployhub.jeneeldumasia.codes"
           
           # Get Zone ID
           ZONE_ID=$(curl -s -X GET "https://api.cloudflare.com/client/v4/zones?name=$ZONE_NAME" \
@@ -150,12 +151,12 @@ jobs:
                -H "Content-Type: application/json" | jq -r '.result[0].id')
                
           if [ -z "$ZONE_ID" ] || [ "$ZONE_ID" == "null" ]; then
-            echo "Error: Could not retrieve Zone ID. You MUST remove IP restrictions from your Cloudflare token to allow GitHub Actions."
+            echo "Error: Could not retrieve Zone ID for $ZONE_NAME. Please check your Cloudflare API token permissions."
             exit 1
           fi
 
           # Check if record exists
-          RECORD_ID=$(curl -s -X GET "https://api.cloudflare.com/client/v4/zones/$ZONE_ID/dns_records?name=*.$ZONE_NAME&type=CNAME" \
+          RECORD_ID=$(curl -s -X GET "https://api.cloudflare.com/client/v4/zones/$ZONE_ID/dns_records?name=$FULL_RECORD_NAME&type=CNAME" \
                -H "Authorization: Bearer ${{ secrets.CLOUDFLARE_API_TOKEN }}" \
                -H "Content-Type: application/json" | jq -r '.result[0].id')
 
@@ -163,13 +164,13 @@ jobs:
             curl -s -X POST "https://api.cloudflare.com/client/v4/zones/$ZONE_ID/dns_records" \
                  -H "Authorization: Bearer ${{ secrets.CLOUDFLARE_API_TOKEN }}" \
                  -H "Content-Type: application/json" \
-                 --data '{"type":"CNAME","name":"*","content":"'${{ env.NLB_URL }}'","ttl":120,"proxied":false}'
+                 --data '{"type":"CNAME","name":"'"$RECORD_NAME"'","content":"'${{ env.NLB_URL }}'","ttl":120,"proxied":false}'
             echo "Created new CNAME record."
           else
             curl -s -X PUT "https://api.cloudflare.com/client/v4/zones/$ZONE_ID/dns_records/$RECORD_ID" \
                  -H "Authorization: Bearer ${{ secrets.CLOUDFLARE_API_TOKEN }}" \
                  -H "Content-Type: application/json" \
-                 --data '{"type":"CNAME","name":"*","content":"'${{ env.NLB_URL }}'","ttl":120,"proxied":false}'
+                 --data '{"type":"CNAME","name":"'"$RECORD_NAME"'","content":"'${{ env.NLB_URL }}'","ttl":120,"proxied":false}'
             echo "Updated existing CNAME record."
           fi
 
