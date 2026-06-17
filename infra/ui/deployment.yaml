@@ -37,6 +37,8 @@ spec:
               value: "https://api.deployhub.jeneeldumasia.codes"
             - name: NEXT_PUBLIC_APP_DOMAIN
               value: "deployhub.jeneeldumasia.codes"
+            - name: AUTH_TRUST_HOST
+              value: "true"
           resources:
             requests:
               cpu: "100m"
