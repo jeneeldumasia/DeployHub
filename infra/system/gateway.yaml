@@ -50,7 +50,6 @@ spec:
     - name: https
       protocol: HTTPS
       port: 443
-      hostname: "*.deployhub.jeneeldumasia.codes"
       tls:
         mode: Terminate
         certificateRefs:
@@ -73,6 +72,7 @@ spec:
       sectionName: http
   hostnames:
     - "*.deployhub.jeneeldumasia.codes"
+    - "deployhub.jeneeldumasia.codes"
   rules:
     - filters:
         - type: RequestRedirect
