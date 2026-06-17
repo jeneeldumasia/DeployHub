@@ -81,5 +81,5 @@ resource "helm_release" "kube_prometheus_stack" {
     value = "ALL"
   }
 
-  depends_on = [module.eks]
+  depends_on = [module.eks, time_sleep.wait_for_alb_webhook]
 }

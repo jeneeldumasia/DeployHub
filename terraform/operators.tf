@@ -11,7 +11,7 @@ resource "helm_release" "keda" {
   namespace        = "keda"
   create_namespace = true
 
-  depends_on = [module.eks]
+  depends_on = [module.eks, time_sleep.wait_for_alb_webhook]
 }
 
 # ── External Secrets Operator ────────────────────────────────────────────────
@@ -313,6 +313,6 @@ resource "helm_release" "karpenter" {
     value = module.karpenter.iam_role_arn
   }
 
-  depends_on = [module.eks, helm_release.aws_load_balancer_controller]
+  depends_on = [module.eks, helm_release.aws_load_balancer_controller, time_sleep.wait_for_alb_webhook]
 }
 
