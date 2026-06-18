@@ -6,10 +6,12 @@ export default function LoginPage() {
     <div className="relative flex h-screen w-full items-center justify-center overflow-hidden bg-black">
       {/* Background Image */}
       <div className="absolute inset-0 z-0">
-        <img
+        <Image
           src="/auth_bg.png"
           alt="Abstract 3D Mesh Background"
-          className="h-full w-full object-cover opacity-80"
+          fill
+          priority
+          className="object-cover opacity-80"
         />
         {/* Subtle dark gradient overlay to ensure text readability */}
         <div className="absolute inset-0 bg-gradient-to-br from-black/60 to-black/30" />
