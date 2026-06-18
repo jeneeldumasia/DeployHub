@@ -12,3 +12,4 @@ resources:
   - cloudflare-secret.yaml
   - gateway.yaml
   - grafana-route.yaml
+  - grafana-dashboards.yaml
