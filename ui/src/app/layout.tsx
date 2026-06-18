@@ -3,7 +3,7 @@ import "./globals.css";
 import { Sidebar } from "@/components/Sidebar";
 
 export const metadata: Metadata = {
-  title: { default: "DeployHub", template: "%s · DeployHub" },
+  title: { default: "ShipZen", template: "%s · ShipZen" },
   description: "Internal Developer Platform",
 };
 

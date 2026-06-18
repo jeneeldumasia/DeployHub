@@ -1,7 +1,7 @@
 apiVersion: monitoring.coreos.com/v1
 kind: PrometheusRule
 metadata:
-  name: deployhub-tenant-usage
+  name: shipzen-tenant-usage
   namespace: observability
 spec:
   groups:
@@ -14,7 +14,7 @@ spec:
               rate(container_cpu_usage_seconds_total{container!="POD", container!=""}[5m])
             )
             * on (namespace) group_left() 
-            kube_namespace_labels{label_deployhub_io_tenant="true"}
+            kube_namespace_labels{label_shipzen_io_tenant="true"}
 
         # Aggregate Tenant Memory Usage (Bytes)
         - record: tenant:memory_usage_bytes:sum
@@ -23,7 +23,7 @@ spec:
               container_memory_working_set_bytes{container!="POD", container!=""}
             )
             * on (namespace) group_left() 
-            kube_namespace_labels{label_deployhub_io_tenant="true"}
+            kube_namespace_labels{label_shipzen_io_tenant="true"}
 
         # Tenant Resource Quota Saturation (CPU)
         - record: tenant:cpu_quota_saturation:ratio

@@ -19,7 +19,7 @@ module "irsa_eso" {
   source  = "terraform-aws-modules/iam/aws//modules/iam-role-for-service-accounts-eks"
   version = "~> 5.0"
 
-  role_name = "DeployHubESO"
+  role_name = "ShipZenESO"
 
   oidc_providers = {
     main = {
@@ -30,7 +30,7 @@ module "irsa_eso" {
 }
 
 resource "aws_iam_role_policy" "eso_secrets_manager" {
-  name   = "DeployHubESOSecretsPolicy"
+  name   = "ShipZenESOSecretsPolicy"
   role   = module.irsa_eso.iam_role_name
   policy = jsonencode({
     Version = "2012-10-17"
@@ -38,7 +38,7 @@ resource "aws_iam_role_policy" "eso_secrets_manager" {
       {
         Effect   = "Allow"
         Action   = ["secretsmanager:GetSecretValue", "secretsmanager:DescribeSecret"]
-        Resource = "arn:aws:secretsmanager:${var.aws_region}:${data.aws_caller_identity.current.account_id}:secret:deployhub/*"
+        Resource = "arn:aws:secretsmanager:${var.aws_region}:${data.aws_caller_identity.current.account_id}:secret:shipzen/*"
       },
       {
         Effect   = "Allow"
@@ -121,8 +121,8 @@ data "aws_iam_policy_document" "alb_controller" {
 }
 
 resource "aws_iam_policy" "alb_controller" {
-  name        = "DeployHubALBControllerPolicy"
-  description = "IAM policy for the AWS Load Balancer Controller in DeployHub"
+  name        = "ShipZenALBControllerPolicy"
+  description = "IAM policy for the AWS Load Balancer Controller in ShipZen"
   policy      = data.aws_iam_policy_document.alb_controller.json
 }
 
@@ -130,7 +130,7 @@ module "irsa_alb_controller" {
   source  = "terraform-aws-modules/iam/aws//modules/iam-role-for-service-accounts-eks"
   version = "~> 5.0"
 
-  role_name = "DeployHubALBController"
+  role_name = "ShipZenALBController"
 
   attach_load_balancer_controller_policy = true
 
@@ -178,7 +178,7 @@ resource "null_resource" "gateway_api_crds" {
     cluster_name = module.eks.cluster_name
   }
   provisioner "local-exec" {
-    command = "aws eks update-kubeconfig --region ${var.aws_region} --name deployhub-cluster && kubectl apply -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.2.0/standard-install.yaml"
+    command = "aws eks update-kubeconfig --region ${var.aws_region} --name shipzen-cluster && kubectl apply -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.2.0/standard-install.yaml"
   }
   depends_on = [module.eks]
 }
@@ -217,7 +217,7 @@ resource "null_resource" "cluster_secret_store" {
   }
   provisioner "local-exec" {
     command = <<EOT
-      aws eks update-kubeconfig --region ${var.aws_region} --name deployhub-cluster
+      aws eks update-kubeconfig --region ${var.aws_region} --name shipzen-cluster
       
       echo "Waiting for ClusterSecretStore CRD to be registered..."
       until kubectl get crd clustersecretstores.external-secrets.io >/dev/null 2>&1; do

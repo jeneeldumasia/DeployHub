@@ -16,14 +16,14 @@ export function Sidebar({ user }: { user?: any }) {
   const pathname = usePathname();
 
   return (
-    <aside className="fixed inset-y-0 left-0 w-60 flex flex-col bg-sidebar-bg/90 backdrop-blur-xl border-r border-sidebar-border shadow-[4px_0_24px_-12px_rgba(0,0,0,0.5)] z-30 transition-colors duration-300">
+    <aside className="fixed inset-y-0 left-0 w-60 flex flex-col bg-white/10 dark:bg-black/20 backdrop-blur-xl border-r border-white/20 dark:border-white/10 shadow-[4px_0_24px_-12px_rgba(0,0,0,0.5)] z-30 transition-colors duration-300">
       {/* Logo */}
       <div className="flex items-center gap-2.5 px-5 py-5 border-b border-sidebar-border">
         <div className="w-8 h-8 rounded-lg bg-brand flex items-center justify-center shadow-glow">
           <Rocket size={16} className="text-white" />
         </div>
         <div>
-          <p className="text-sidebar-heading font-bold text-sm leading-none">DeployHub</p>
+          <p className="text-sidebar-heading font-bold text-sm leading-none">ShipZen</p>
           <p className="text-sidebar-text text-xs mt-0.5">Platform v1.0</p>
         </div>
       </div>

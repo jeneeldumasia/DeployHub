@@ -25,4 +25,4 @@ __pycache__/
 .pytest_cache/
 .venv/
 venv/
-deployhub_analysis.md
+shipzen_analysis.md

@@ -1,19 +1,19 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: deployhub-ui
-  namespace: deployhub-system
+  name: shipzen-ui
+  namespace: shipzen-system
   labels:
-    app: deployhub-ui
+    app: shipzen-ui
 spec:
   replicas: 2
   selector:
     matchLabels:
-      app: deployhub-ui
+      app: shipzen-ui
   template:
     metadata:
       labels:
-        app: deployhub-ui
+        app: shipzen-ui
     spec:
       securityContext:
         runAsNonRoot: true
@@ -22,7 +22,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: ui
-          image: deployhub-ui:latest
+          image: shipzen-ui:latest
           imagePullPolicy: Always
           securityContext:
             allowPrivilegeEscalation: false
@@ -34,9 +34,9 @@ spec:
               protocol: TCP
           env:
             - name: NEXT_PUBLIC_API_URL
-              value: "https://api.deployhub.jeneeldumasia.codes"
+              value: "https://api.shipzen.jeneeldumasia.codes"
             - name: NEXT_PUBLIC_APP_DOMAIN
-              value: "deployhub.jeneeldumasia.codes"
+              value: "shipzen.jeneeldumasia.codes"
             - name: AUTH_TRUST_HOST
               value: "true"
           resources:

@@ -2,7 +2,7 @@ import os
 
 
 class Config:
-    REDIS_HOST = os.getenv("REDIS_HOST", "redis-master.deployhub-system.svc.cluster.local")
+    REDIS_HOST = os.getenv("REDIS_HOST", "redis-master.shipzen-system.svc.cluster.local")
     REDIS_PORT = int(os.getenv("REDIS_PORT", "6379"))
 
     # Fix #20: raise on missing DATABASE_URL rather than silently falling back

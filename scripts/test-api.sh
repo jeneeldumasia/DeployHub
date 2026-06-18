@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# DeployHub API smoke test
+# ShipZen API smoke test
 # Run after: docker compose up --build
 # Requires: curl, jq
 
@@ -29,7 +29,7 @@ check() {
 
 echo ""
 echo "══════════════════════════════════════════"
-echo "  DeployHub API Smoke Test"
+echo "  ShipZen API Smoke Test"
 echo "══════════════════════════════════════════"
 echo ""
 
@@ -92,8 +92,8 @@ RESP=$(curl -s -o /tmp/dh_body -w "%{http_code}" \
   -X POST "$BASE/projects/$PROJECT_ID/deployments" \
   -H "Content-Type: application/json" \
   -d '{
-    "repo_url": "https://github.com/jeneeldumasia/DeployHub",
-    "image_name": "123456789012.dkr.ecr.us-east-1.amazonaws.com/deployhub-builds:latest",
+    "repo_url": "https://github.com/jeneeldumasia/ShipZen",
+    "image_name": "123456789012.dkr.ecr.us-east-1.amazonaws.com/shipzen-builds:latest",
     "replicas": 1,
     "port": 8080
   }')
@@ -124,7 +124,7 @@ RESP=$(curl -s -o /tmp/dh_body -w "%{http_code}" \
   -X POST "$BASE/projects/$PROJECT_ID/deployments" \
   -H "Content-Type: application/json" \
   -d '{
-    "repo_url": "https://github.com/jeneeldumasia/DeployHub",
+    "repo_url": "https://github.com/jeneeldumasia/ShipZen",
     "image_name": "some-image:latest",
     "replicas": 999
   }')

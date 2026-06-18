@@ -1,7 +1,7 @@
 # Session 3 — Infrastructure Completion & API Server
 
 ## Overview
-The DeployHub backend engine is built and its bugs fixed. This session completes the missing infrastructure so the system can actually run end-to-end: operators installed, services deployed, schema applied, and the API server built.
+The ShipZen backend engine is built and its bugs fixed. This session completes the missing infrastructure so the system can actually run end-to-end: operators installed, services deployed, schema applied, and the API server built.
 
 The platform teardown-per-session constraint is in effect (AWS student credits). All infra must be cleanly destroyable via the existing `destroy.yaml` workflow.
 
@@ -13,19 +13,19 @@ Install all missing cluster dependencies as Helm releases in Terraform so they a
 
 #### 1.1 Redis
 - Install Bitnami Redis via `helm_release` in a new `terraform/redis.tf`
-- Namespace: `deployhub-system`
+- Namespace: `shipzen-system`
 - Single master, no replicas (cost: student account)
 - Persistence disabled (data is ephemeral queue — acceptable)
-- Service name must resolve to `redis-master.deployhub-system.svc.cluster.local` to match existing service references in worker and builder
+- Service name must resolve to `redis-master.shipzen-system.svc.cluster.local` to match existing service references in worker and builder
 - `depends_on` EKS
 
 #### 1.2 PostgreSQL
 - Install Bitnami PostgreSQL via `helm_release` in `terraform/postgres.tf`
-- Namespace: `deployhub-system`
+- Namespace: `shipzen-system`
 - Single instance, no replicas
 - Persistence enabled with a small PVC (10Gi)
-- Database name: `deployhub`, username: `deployhub`
-- Password stored as a Kubernetes Secret, referenced by name `deployhub-db-credentials` with key `url` (full connection string) — this matches the `secretKeyRef` already in `infra/builder/deployment.yaml`
+- Database name: `shipzen`, username: `shipzen`
+- Password stored as a Kubernetes Secret, referenced by name `shipzen-db-credentials` with key `url` (full connection string) — this matches the `secretKeyRef` already in `infra/builder/deployment.yaml`
 - `depends_on` EKS
 
 #### 1.3 KEDA
@@ -59,47 +59,47 @@ Install all missing cluster dependencies as Helm releases in Terraform so they a
   - `ecr:*` on all ECR repos in the account
   - `s3:*` on the build logs bucket ARN
   - `iam:PassRole` scoped to the builder and ESO roles
-- Subject must be scoped to `repo:jeneeldumasia/DeployHub:ref:refs/heads/main` (not wildcard `*`)
+- Subject must be scoped to `repo:jeneeldumasia/ShipZen:ref:refs/heads/main` (not wildcard `*`)
 
 #### 1.8 ECR Repository (fix #8.8)
-- Add `aws_ecr_repository` resource in `terraform/main.tf` named `deployhub-builds`
+- Add `aws_ecr_repository` resource in `terraform/main.tf` named `shipzen-builds`
 - Output the repository URL as `ecr_repository_url`
 - Add a Terraform output that also writes the bucket name as `build_logs_bucket_name`
 
 ### 2. infra/ — Missing Deployment Manifests
 
-#### 2.1 deployhub-system namespace
-- Create `infra/system/namespace.yaml` for the `deployhub-system` namespace with label `deployhub.io/system: "true"`
+#### 2.1 shipzen-system namespace
+- Create `infra/system/namespace.yaml` for the `shipzen-system` namespace with label `shipzen.io/system: "true"`
 
 #### 2.2 Controller Deployment
 - Create `infra/controller/deployment.yaml`
-- Namespace: `deployhub-system`
-- Single container running `deployhub-controller:latest`
-- Env vars via `secretKeyRef` from `deployhub-db-credentials` for `DATABASE_URL`
+- Namespace: `shipzen-system`
+- Single container running `shipzen-controller:latest`
+- Env vars via `secretKeyRef` from `shipzen-db-credentials` for `DATABASE_URL`
 - `RECONCILIATION_INTERVAL` env var defaulting to `"60"`
 - Resource requests: 100m CPU, 128Mi memory. Limits: 500m CPU, 256Mi
 - `imagePullPolicy: Always` (so new builds are picked up)
-- ServiceAccount: `deployhub-controller-sa`
+- ServiceAccount: `shipzen-controller-sa`
 - Liveness probe: HTTP GET `/healthz` on port 9090 (the metrics port), initialDelaySeconds 15
 - Create `infra/controller/serviceaccount.yaml`
 - Create `infra/controller/kustomization.yaml` referencing all controller manifests
 
 #### 2.3 Worker Deployment
 - Create `infra/worker/deployment.yaml`
-- Namespace: `deployhub-system`
-- Single container running `deployhub-worker:latest`
-- Env vars: `DATABASE_URL` from `deployhub-db-credentials`, `REDIS_HOST` value `redis-master.deployhub-system.svc.cluster.local`, `STREAM_NAME` value `deploy_stream`, `CONSUMER_GROUP` value `worker_group`, `BUILDER_QUEUE_NAME` value `builder_queue`
+- Namespace: `shipzen-system`
+- Single container running `shipzen-worker:latest`
+- Env vars: `DATABASE_URL` from `shipzen-db-credentials`, `REDIS_HOST` value `redis-master.shipzen-system.svc.cluster.local`, `STREAM_NAME` value `deploy_stream`, `CONSUMER_GROUP` value `worker_group`, `BUILDER_QUEUE_NAME` value `builder_queue`
 - Resource requests: 100m CPU, 128Mi memory. Limits: 500m CPU, 256Mi
 - `imagePullPolicy: Always`
-- ServiceAccount: `deployhub-worker-sa`
+- ServiceAccount: `shipzen-worker-sa`
 - Create `infra/worker/serviceaccount.yaml`
 - Create `infra/worker/kustomization.yaml`
 
 #### 2.4 API Server Deployment
 - Create `infra/api/deployment.yaml`
-- Namespace: `deployhub-system`
-- Single container running `deployhub-api:latest`, port 8000
-- Env vars: `DATABASE_URL` from `deployhub-db-credentials`, `REDIS_HOST`, `STREAM_NAME`
+- Namespace: `shipzen-system`
+- Single container running `shipzen-api:latest`, port 8000
+- Env vars: `DATABASE_URL` from `shipzen-db-credentials`, `REDIS_HOST`, `STREAM_NAME`
 - Service: ClusterIP on port 80 → 8000
 - Create `infra/api/service.yaml`
 - Create `infra/api/kustomization.yaml`
@@ -118,7 +118,7 @@ Install all missing cluster dependencies as Helm releases in Terraform so they a
 
 ### 3. API Server (Phase 16)
 
-Build a FastAPI HTTP server in `api/main.py` that is the sole entry point for developers to interact with DeployHub.
+Build a FastAPI HTTP server in `api/main.py` that is the sole entry point for developers to interact with ShipZen.
 
 #### 3.1 Endpoints
 
@@ -169,9 +169,9 @@ Build a FastAPI HTTP server in `api/main.py` that is the sole entry point for de
 
 #### 4.3 Add ServiceMonitor resources (fix #6.4)
 - Create `infra/system/servicemonitors.yaml` with `ServiceMonitor` resources for:
-  - `deployhub-worker` scraping port 8000
-  - `deployhub-controller` scraping port 9090
-  - `deployhub-api` scraping port 8000
+  - `shipzen-worker` scraping port 8000
+  - `shipzen-controller` scraping port 9090
+  - `shipzen-api` scraping port 8000
 - Add matching `Service` objects (ClusterIP, no external access) for worker and controller to expose their metrics ports
 
 #### 4.4 Fix hardcoded AWS account ID (fix #4.1)

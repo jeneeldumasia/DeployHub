@@ -1,5 +1,5 @@
 """
-Auth0 JWT authentication for the DeployHub API.
+Auth0 JWT authentication for the ShipZen API.
 
 Validates Bearer tokens from the Authorization header against Auth0's JWKS endpoint.
 Falls back to a permissive stub when AUTH0_DOMAIN is not set (local dev / CI).
@@ -118,7 +118,7 @@ def get_current_user(
 
         # Check for admin role in custom claim
         # Set this up in Auth0 Actions: event.user.app_metadata.roles
-        roles = payload.get("https://deployhub.jeneeldumasia.codes/roles", [])
+        roles = payload.get("https://shipzen.jeneeldumasia.codes/roles", [])
         is_admin = "admin" in roles
 
         return User(user_id=user_id, is_admin=is_admin)

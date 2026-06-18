@@ -2,7 +2,7 @@ apiVersion: monitoring.coreos.com/v1alpha1
 kind: AlertmanagerConfig
 metadata:
   name: platform-routing
-  namespace: deployhub-system
+  namespace: shipzen-system
 spec:
   route:
     receiver: slack-general
@@ -34,9 +34,9 @@ spec:
     - name: slack-general
       slackConfigs:
         - apiURL:
-            name: deployhub-alerts-secrets
+            name: shipzen-alerts-secrets
             key: slack-webhook-url
-          channel: '#deployhub-general'
+          channel: '#shipzen-general'
           sendResolved: true
           title: '[{{ .Status | toUpper }}] {{ .GroupLabels.SortedPairs.Values | join " " }}'
           text: "{{ range .Alerts }}{{ .Annotations.description }}\n{{ end }}"
@@ -44,9 +44,9 @@ spec:
     - name: slack-alerts
       slackConfigs:
         - apiURL:
-            name: deployhub-alerts-secrets
+            name: shipzen-alerts-secrets
             key: slack-webhook-url
-          channel: '#deployhub-alerts'
+          channel: '#shipzen-alerts'
           sendResolved: true
           title: '[{{ .Status | toUpper }}] {{ .GroupLabels.SortedPairs.Values | join " " }}'
           text: "{{ range .Alerts }}{{ .Annotations.description }}\n{{ end }}"
@@ -54,7 +54,7 @@ spec:
     - name: pagerduty-critical
       pagerdutyConfigs:
         - routingKey:
-            name: deployhub-alerts-secrets
+            name: shipzen-alerts-secrets
             key: pagerduty-routing-key
           sendResolved: true
 
@@ -62,21 +62,21 @@ spec:
 apiVersion: external-secrets.io/v1beta1
 kind: ExternalSecret
 metadata:
-  name: deployhub-alerts-secrets
-  namespace: deployhub-system
+  name: shipzen-alerts-secrets
+  namespace: shipzen-system
 spec:
   refreshInterval: 1h
   secretStoreRef:
     name: aws-secretsmanager
     kind: ClusterSecretStore
   target:
-    name: deployhub-alerts-secrets
+    name: shipzen-alerts-secrets
   data:
     - secretKey: slack-webhook-url
       remoteRef:
-        key: deployhub/alerts
+        key: shipzen/alerts
         property: slack-webhook-url
     - secretKey: pagerduty-routing-key
       remoteRef:
-        key: deployhub/alerts
+        key: shipzen/alerts
         property: pagerduty-routing-key

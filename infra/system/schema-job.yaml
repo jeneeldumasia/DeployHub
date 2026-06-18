@@ -1,8 +1,8 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: deployhub-schema-bootstrap
-  namespace: deployhub-system
+  name: shipzen-schema-bootstrap
+  namespace: shipzen-system
   annotations:
     # ArgoCD: run this Job on every sync but treat it as a hook, not a
     # persistent resource. PostSync ensures it runs after the namespace
@@ -29,7 +29,7 @@ spec:
             - name: DATABASE_URL
               valueFrom:
                 secretKeyRef:
-                  name: deployhub-db-credentials
+                  name: shipzen-db-credentials
                   key: url
           volumeMounts:
             - name: schema
@@ -38,4 +38,4 @@ spec:
       volumes:
         - name: schema
           configMap:
-            name: deployhub-schema
+            name: shipzen-schema

@@ -1,7 +1,7 @@
 apiVersion: monitoring.coreos.com/v1
 kind: PrometheusRule
 metadata:
-  name: deployhub-platform-alerts
+  name: shipzen-platform-alerts
   namespace: observability
 spec:
   groups:
@@ -9,7 +9,7 @@ spec:
       rules:
         # Queue Backlog
         - alert: DeploymentQueueBacklog
-          expr: deployhub_queue_depth > 100
+          expr: shipzen_queue_depth > 100
           for: 5m
           labels:
             severity: high
@@ -19,7 +19,7 @@ spec:
 
         # DLQ Growth
         - alert: DLQGrowing
-          expr: increase(deployhub_dlq_depth[5m]) > 0
+          expr: increase(shipzen_dlq_depth[5m]) > 0
           for: 1m
           labels:
             severity: critical
@@ -29,7 +29,7 @@ spec:
 
         # Builder Failures
         - alert: HighBuilderFailures
-          expr: rate(deployhub_retry_total[5m]) > 2
+          expr: rate(shipzen_retry_total[5m]) > 2
           for: 5m
           labels:
             severity: warning
@@ -69,10 +69,10 @@ spec:
 
         # Reconciliation Failures
         - alert: ReconciliationDriftHigh
-          # Fix #14/#6.2: deployhub_drift_total is now a Counter (was Gauge).
+          # Fix #14/#6.2: shipzen_drift_total is now a Counter (was Gauge).
           # rate() is correct for a Counter. The old Gauge + rate() combination
           # always returned 0 making this alert permanently silent.
-          expr: rate(deployhub_drift_total_total[5m]) > 0
+          expr: rate(shipzen_drift_total_total[5m]) > 0
           for: 5m
           labels:
             severity: warning

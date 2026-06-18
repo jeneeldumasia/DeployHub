@@ -2,7 +2,7 @@ apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
   name: builder-strict-isolation
-  namespace: deployhub-build
+  namespace: shipzen-build
 spec:
   podSelector: {} # Applies to all pods in this namespace
   policyTypes:
@@ -33,11 +33,11 @@ spec:
         - protocol: TCP
           port: 80
     
-    # Exception for Redis Queue (Build Dependency) in deployhub-system
+    # Exception for Redis Queue (Build Dependency) in shipzen-system
     - to:
         - namespaceSelector:
             matchLabels:
-              kubernetes.io/metadata.name: deployhub-system
+              kubernetes.io/metadata.name: shipzen-system
           podSelector:
             matchLabels:
               app: redis

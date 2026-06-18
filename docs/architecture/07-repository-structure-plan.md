@@ -1,7 +1,7 @@
 # Repository Structure Plan
 
 ```text
-DeployHub/
+ShipZen/
 ├── api/              # API server
 ├── worker/           # Deployment queue worker
 ├── builder/          # Build system (Buildpacks + Dockerfile fallback)

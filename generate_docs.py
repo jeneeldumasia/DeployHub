@@ -1,7 +1,7 @@
 import os
 import pathlib
 
-DOCS_DIR = pathlib.Path('c:/Project/DeployHub/docs')
+DOCS_DIR = pathlib.Path('c:/Project/ShipZen/docs')
 ADR_DIR = DOCS_DIR / 'adr'
 ARCH_DIR = DOCS_DIR / 'architecture'
 
@@ -17,7 +17,7 @@ graph TD
     CF --> ALB[AWS ALB]
     ALB --> EG[Envoy Gateway - Gateway API]
     
-    subgraph DeployHub Control Plane
+    subgraph ShipZen Control Plane
         EG --> API[API Server]
         API --> Redis[Redis Streams - Queue]
         API --> Mongo[(MongoDB - Source of Truth)]
@@ -96,7 +96,7 @@ sequenceDiagram
 ```mermaid
 flowchart LR
     User([User]) -->|Source Code| GitHub[GitHub Repo]
-    User -->|Deploy Request| API[DeployHub API]
+    User -->|Deploy Request| API[ShipZen API]
     API -->|Write Desired State| DB[(MongoDB)]
     API -->|Enqueue Event| Queue[Redis Streams]
     
@@ -121,7 +121,7 @@ graph TD
         Cloudflare --> AWS_ALB[AWS ALB]
     end
     
-    subgraph DeployHub Platform [Namespace: deployhub-system]
+    subgraph ShipZen Platform [Namespace: shipzen-system]
         AWS_ALB --> Envoy[Envoy Gateway]
         Envoy --> API[API Server]
         API --> Mongo[(MongoDB)]
@@ -130,7 +130,7 @@ graph TD
         ESO[External Secrets Operator]
     end
     
-    subgraph Builder Isolation [Namespace: deployhub-build]
+    subgraph Builder Isolation [Namespace: shipzen-build]
         Worker --> Builder[Builder Pods]
         Builder -- IRSA --> ECR[AWS ECR]
         Builder -- NetworkPolicy --> ExternalGit[GitHub]
@@ -164,7 +164,7 @@ stateDiagram-v2
     '07-repository-structure-plan.md': '''# Repository Structure Plan
 
 ```text
-DeployHub/
+ShipZen/
 ├── api/              # API server
 ├── worker/           # Deployment queue worker
 ├── builder/          # Build system (Buildpacks + Dockerfile fallback)

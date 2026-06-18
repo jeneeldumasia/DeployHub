@@ -7,16 +7,16 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: deployhub-worker-metrics
-  namespace: deployhub-system
+  name: shipzen-worker-metrics
+  namespace: shipzen-system
   labels:
-    app: deployhub-worker
-    deployhub.jeneeldumasia.codes/metrics: "true"
+    app: shipzen-worker
+    shipzen.jeneeldumasia.codes/metrics: "true"
 spec:
   type: ClusterIP
   clusterIP: None  # Headless — Prometheus connects directly to pod IPs
   selector:
-    app: deployhub-worker
+    app: shipzen-worker
   ports:
     - name: metrics
       port: 8000
@@ -26,16 +26,16 @@ spec:
 apiVersion: monitoring.coreos.com/v1
 kind: ServiceMonitor
 metadata:
-  name: deployhub-worker
-  namespace: deployhub-system
+  name: shipzen-worker
+  namespace: shipzen-system
   labels:
     # kube-prometheus-stack discovers ServiceMonitors by this label
     release: kube-prometheus-stack
 spec:
   selector:
     matchLabels:
-      deployhub.jeneeldumasia.codes/metrics: "true"
-      app: deployhub-worker
+      shipzen.jeneeldumasia.codes/metrics: "true"
+      app: shipzen-worker
   endpoints:
     - port: metrics
       interval: 30s
@@ -45,16 +45,16 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: deployhub-controller-metrics
-  namespace: deployhub-system
+  name: shipzen-controller-metrics
+  namespace: shipzen-system
   labels:
-    app: deployhub-controller
-    deployhub.jeneeldumasia.codes/metrics: "true"
+    app: shipzen-controller
+    shipzen.jeneeldumasia.codes/metrics: "true"
 spec:
   type: ClusterIP
   clusterIP: None
   selector:
-    app: deployhub-controller
+    app: shipzen-controller
   ports:
     - name: metrics
       port: 9090
@@ -64,15 +64,15 @@ spec:
 apiVersion: monitoring.coreos.com/v1
 kind: ServiceMonitor
 metadata:
-  name: deployhub-controller
-  namespace: deployhub-system
+  name: shipzen-controller
+  namespace: shipzen-system
   labels:
     release: kube-prometheus-stack
 spec:
   selector:
     matchLabels:
-      deployhub.jeneeldumasia.codes/metrics: "true"
-      app: deployhub-controller
+      shipzen.jeneeldumasia.codes/metrics: "true"
+      app: shipzen-controller
   endpoints:
     - port: metrics
       interval: 30s
@@ -82,16 +82,16 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: deployhub-api-metrics
-  namespace: deployhub-system
+  name: shipzen-api-metrics
+  namespace: shipzen-system
   labels:
-    app: deployhub-api
-    deployhub.jeneeldumasia.codes/metrics: "true"
+    app: shipzen-api
+    shipzen.jeneeldumasia.codes/metrics: "true"
 spec:
   type: ClusterIP
   clusterIP: None
   selector:
-    app: deployhub-api
+    app: shipzen-api
   ports:
     - name: metrics
       port: 8000
@@ -101,15 +101,15 @@ spec:
 apiVersion: monitoring.coreos.com/v1
 kind: ServiceMonitor
 metadata:
-  name: deployhub-api
-  namespace: deployhub-system
+  name: shipzen-api
+  namespace: shipzen-system
   labels:
     release: kube-prometheus-stack
 spec:
   selector:
     matchLabels:
-      deployhub.jeneeldumasia.codes/metrics: "true"
-      app: deployhub-api
+      shipzen.jeneeldumasia.codes/metrics: "true"
+      app: shipzen-api
   endpoints:
     - port: metrics
       interval: 30s

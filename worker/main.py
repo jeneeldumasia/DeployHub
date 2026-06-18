@@ -5,9 +5,9 @@ from queue_client import QueueClient
 from state_machine import StateMachine, DeploymentState
 from metrics import (
     start_metrics_server, 
-    deployhub_retry_total, 
-    deployhub_queue_latency_seconds,
-    deployhub_deployment_failure_total
+    shipzen_retry_total, 
+    shipzen_queue_latency_seconds,
+    shipzen_deployment_failure_total
 )
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -40,7 +40,7 @@ def process_message(queue: QueueClient, state_machine: StateMachine, message_id:
     if queued_at:
         try:
             latency = time.time() - float(queued_at)
-            deployhub_queue_latency_seconds.observe(latency)
+            shipzen_queue_latency_seconds.observe(latency)
         except (ValueError, TypeError):
             pass
 
@@ -75,13 +75,13 @@ def process_message(queue: QueueClient, state_machine: StateMachine, message_id:
     except Exception as e:
         logger.error(f"Error processing {deployment_id}: {e}")
         retries += 1
-        deployhub_retry_total.inc()
+        shipzen_retry_total.inc()
 
         if retries > config.MAX_RETRIES:
             logger.error(f"Max retries exceeded for {deployment_id}. Moving to DLQ.")
             state_machine.update_state(deployment_id, DeploymentState.DLQ, error_msg=str(e))
             queue.add_to_dlq(message_id, data)
-            deployhub_deployment_failure_total.inc()
+            shipzen_deployment_failure_total.inc()
         else:
             state_machine.update_state(deployment_id, DeploymentState.RETRY, error_msg=str(e))
             backoff = 2 ** retries

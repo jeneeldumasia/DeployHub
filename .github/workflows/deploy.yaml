@@ -55,7 +55,7 @@ jobs:
       - name: Cleanup Stuck Webhooks
         working-directory: ./terraform
         run: |
-          aws eks update-kubeconfig --region ${{ vars.AWS_REGION || 'us-east-1' }} --name deployhub-cluster || true
+          aws eks update-kubeconfig --region ${{ vars.AWS_REGION || 'us-east-1' }} --name shipzen-cluster || true
           kubectl delete validatingwebhookconfigurations --all || true
           kubectl delete mutatingwebhookconfigurations --all || true
 
@@ -66,8 +66,8 @@ jobs:
       # kubernetes/helm providers need RBAC access that only Terraform can grant.
       - name: Bootstrap EKS Access for GitHub Actions Role
         run: |
-          ROLE_ARN="arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID || '952994886652' }}:role/DeployHub-AA-SuperRole"
-          CLUSTER="deployhub-cluster"
+          ROLE_ARN="arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID || '952994886652' }}:role/ShipZen-AA-SuperRole"
+          CLUSTER="shipzen-cluster"
           REGION="${{ vars.AWS_REGION || 'us-east-1' }}"
 
           echo "Ensuring EKS access entry exists for $ROLE_ARN..."
@@ -100,15 +100,15 @@ jobs:
         run: terraform apply tfplan
 
       - name: Configure kubectl
-        run: aws eks update-kubeconfig --region ${{ vars.AWS_REGION || 'us-east-1' }} --name deployhub-cluster
+        run: aws eks update-kubeconfig --region ${{ vars.AWS_REGION || 'us-east-1' }} --name shipzen-cluster
 
       - name: Clean up stale cert-manager state
         run: |
           # First trigger deletion without blocking
-          kubectl delete challenge --all -n deployhub-system --wait=false 2>/dev/null || true
+          kubectl delete challenge --all -n shipzen-system --wait=false 2>/dev/null || true
           # Then patch the finalizers to forcefully resolve any stuck deletions
-          kubectl get challenge -n deployhub-system -o name 2>/dev/null | \
-            xargs -I {} kubectl patch {} -n deployhub-system -p '{"metadata":{"finalizers":[]}}' --type=merge 2>/dev/null || true
+          kubectl get challenge -n shipzen-system -o name 2>/dev/null | \
+            xargs -I {} kubectl patch {} -n shipzen-system -p '{"metadata":{"finalizers":[]}}' --type=merge 2>/dev/null || true
           # Delete the cached Kubernetes secret so ESO fetches the latest from AWS
           kubectl delete secret cloudflare-api-token-secret -n cert-manager 2>/dev/null || true
           # Restart cert-manager to clear any backoff/rate-limit state
@@ -142,7 +142,7 @@ jobs:
         run: |
           echo "Updating Cloudflare DNS..."
           ZONE_NAME="jeneeldumasia.codes"
-          RECORDS=("*.deployhub" "deployhub")
+          RECORDS=("*.shipzen" "shipzen")
           
           # Get Zone ID
           ZONE_ID=$(curl -s -X GET "https://api.cloudflare.com/client/v4/zones?name=$ZONE_NAME" \
@@ -155,10 +155,10 @@ jobs:
           fi
 
           for RECORD_NAME in "${RECORDS[@]}"; do
-            if [ "$RECORD_NAME" == "*.deployhub" ]; then
-              FULL_RECORD_NAME="*.deployhub.jeneeldumasia.codes"
+            if [ "$RECORD_NAME" == "*.shipzen" ]; then
+              FULL_RECORD_NAME="*.shipzen.jeneeldumasia.codes"
             else
-              FULL_RECORD_NAME="deployhub.jeneeldumasia.codes"
+              FULL_RECORD_NAME="shipzen.jeneeldumasia.codes"
             fi
             
             echo "Processing record: $FULL_RECORD_NAME"
@@ -189,7 +189,7 @@ jobs:
           ELAPSED=0
           MAX_WAIT=600
           while [ $ELAPSED -lt $MAX_WAIT ]; do
-            READY=$(kubectl get certificate deployhub-tls-cert -n deployhub-system -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}' 2>/dev/null || echo "False")
+            READY=$(kubectl get certificate shipzen-tls-cert -n shipzen-system -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}' 2>/dev/null || echo "False")
             if [ "$READY" = "True" ]; then
               echo "TLS certificate is ready!"
               break
@@ -201,7 +201,7 @@ jobs:
           if [ "$READY" != "True" ]; then
             echo "WARNING: Certificate did not become ready within ${MAX_WAIT}s."
             kubectl logs deployment/cert-manager -n cert-manager --tail=20 | grep -i -E 'error|fail|cloudflare' || true
-            kubectl get challenge -n deployhub-system || true
+            kubectl get challenge -n shipzen-system || true
             exit 1
           fi
           

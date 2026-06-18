@@ -41,17 +41,17 @@ resource "helm_release" "kube_prometheus_stack" {
   # Grafana admin password — change before exposing externally
   set {
     name  = "grafana.adminPassword"
-    value = var.grafana_password != "" ? var.grafana_password : "deployhub-grafana"
+    value = var.grafana_password != "" ? var.grafana_password : "shipzen-grafana"
   }
 
   set {
     name  = "grafana.grafana\\.ini.server.domain"
-    value = "grafana.deployhub.jeneeldumasia.codes"
+    value = "grafana.shipzen.jeneeldumasia.codes"
   }
 
   set {
     name  = "grafana.grafana\\.ini.server.root_url"
-    value = "https://grafana.deployhub.jeneeldumasia.codes"
+    value = "https://grafana.shipzen.jeneeldumasia.codes"
   }
 
   set {

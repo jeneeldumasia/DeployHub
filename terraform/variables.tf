@@ -5,7 +5,7 @@ variable "aws_region" {
 }
 
 variable "pg_password" {
-  description = "PostgreSQL password for the deployhub user. If empty, a default is used (not suitable for production)."
+  description = "PostgreSQL password for the shipzen user. If empty, a default is used (not suitable for production)."
   type        = string
   default     = ""
   sensitive   = true

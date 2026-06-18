@@ -3,7 +3,7 @@
 ```mermaid
 flowchart LR
     User([User]) -->|Source Code| GitHub[GitHub Repo]
-    User -->|Deploy Request| API[DeployHub API]
+    User -->|Deploy Request| API[ShipZen API]
     API -->|Write Desired State| DB[(PostgreSQL)]
     API -->|Enqueue Event| Queue[Redis Streams]
     

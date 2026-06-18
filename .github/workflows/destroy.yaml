@@ -34,7 +34,7 @@ jobs:
 
       - name: Configure kubectl
         run: |
-          aws eks update-kubeconfig --region ${{ vars.AWS_REGION || 'us-east-1' }} --name deployhub-cluster || echo "cluster_not_found=true" >> $GITHUB_ENV
+          aws eks update-kubeconfig --region ${{ vars.AWS_REGION || 'us-east-1' }} --name shipzen-cluster || echo "cluster_not_found=true" >> $GITHUB_ENV
 
       # Step 1: Suspend ArgoCD auto-sync FIRST.
       # If we skip this, ArgoCD's selfHeal will re-create every resource
@@ -42,7 +42,7 @@ jobs:
       - name: Suspend ArgoCD Auto-Sync
         if: env.cluster_not_found != 'true'
         run: |
-          kubectl patch application deployhub-platform \
+          kubectl patch application shipzen-platform \
             -n argocd \
             --type merge \
             -p '{"spec":{"syncPolicy":{"automated":null}}}' \
@@ -88,7 +88,7 @@ jobs:
         run: |
           echo "Cleaning up Cloudflare DNS records..."
           ZONE_NAME="jeneeldumasia.codes"
-          RECORDS=("*.deployhub.jeneeldumasia.codes" "deployhub.jeneeldumasia.codes")
+          RECORDS=("*.shipzen.jeneeldumasia.codes" "shipzen.jeneeldumasia.codes")
           
           ZONE_ID=$(curl -s -X GET "https://api.cloudflare.com/client/v4/zones?name=$ZONE_NAME" \
                -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
@@ -138,12 +138,12 @@ jobs:
 
       # Step 5: Force Delete ALL Load Balancers in our VPC.
       # Kubernetes auto-generates LB names (e.g. 'a96304a043ff34844875f422f978eb9a')
-      # that do NOT contain 'deployhub', so name-based search misses them.
+      # that do NOT contain 'shipzen', so name-based search misses them.
       # We find them by VPC ID instead — if it's in our VPC, it must go.
       - name: Force Delete Load Balancers, Target Groups, ENIs, EIPs, and Security Groups
         run: |
           VPC_ID=$(aws ec2 describe-vpcs \
-            --filters "Name=tag:Name,Values=deployhub-vpc" \
+            --filters "Name=tag:Name,Values=shipzen-vpc" \
             --query "Vpcs[0].VpcId" \
             --output text 2>/dev/null || echo "")
 
@@ -284,7 +284,7 @@ jobs:
           sleep 10
           SG_IDS=$(aws ec2 describe-security-groups \
             --filters "Name=vpc-id,Values=$VPC_ID" \
-            --query "SecurityGroups[?GroupName!='default' && !contains(GroupName, 'deployhub-cluster')].GroupId" \
+            --query "SecurityGroups[?GroupName!='default' && !contains(GroupName, 'shipzen-cluster')].GroupId" \
             --output text 2>/dev/null || echo "")
 
           if [ -n "$SG_IDS" ]; then
@@ -360,7 +360,7 @@ jobs:
           done
 
           VPC_ID=$(aws ec2 describe-vpcs \
-            --filters "Name=tag:Name,Values=deployhub-vpc" \
+            --filters "Name=tag:Name,Values=shipzen-vpc" \
             --query "Vpcs[0].VpcId" \
             --output text 2>/dev/null || echo "")
 
@@ -413,7 +413,7 @@ jobs:
             # Delete SGs
             SG_IDS=$(aws ec2 describe-security-groups \
               --filters "Name=vpc-id,Values=$VPC_ID" \
-              --query "SecurityGroups[?GroupName!='default' && !contains(GroupName, 'deployhub-cluster')].GroupId" \
+              --query "SecurityGroups[?GroupName!='default' && !contains(GroupName, 'shipzen-cluster')].GroupId" \
               --output text 2>/dev/null || echo "")
             for SG in $SG_IDS; do
               aws ec2 revoke-security-group-ingress --group-id "$SG" \
@@ -433,7 +433,7 @@ jobs:
         if: always()
         run: |
           VPC_ID=$(aws ec2 describe-vpcs \
-            --filters "Name=tag:Name,Values=deployhub-vpc" \
+            --filters "Name=tag:Name,Values=shipzen-vpc" \
             --query "Vpcs[0].VpcId" \
             --output text 2>/dev/null || echo "")
 
@@ -462,7 +462,7 @@ jobs:
         run: |
           echo "🧹 Sweeping for orphaned EBS Volumes (dynamically provisioned by Kubernetes)..."
           VOLUMES=$(aws ec2 describe-volumes \
-            --query "Volumes[?Tags != null] | [?contains(to_string(Tags), 'deployhub')].VolumeId" \
+            --query "Volumes[?Tags != null] | [?contains(to_string(Tags), 'shipzen')].VolumeId" \
             --output text 2>/dev/null || echo "")
           
           for VOL in $VOLUMES; do
@@ -471,7 +471,7 @@ jobs:
           done
 
           echo "🧹 Sweeping for orphaned S3 Buckets..."
-          BUCKETS=$(aws s3api list-buckets --query "Buckets[?contains(Name, 'deployhub')].Name" --output text 2>/dev/null || echo "")
+          BUCKETS=$(aws s3api list-buckets --query "Buckets[?contains(Name, 'shipzen')].Name" --output text 2>/dev/null || echo "")
           
           for BUCKET in $BUCKETS; do
             echo "Emptying and deleting orphaned S3 Bucket: $BUCKET"
@@ -481,9 +481,9 @@ jobs:
           done
 
           echo "🧹 Sweeping for unassociated Elastic IPs..."
-          # Find any EIPs that are not associated with an instance/ENI and are tagged with deployhub
+          # Find any EIPs that are not associated with an instance/ENI and are tagged with shipzen
           EIPS=$(aws ec2 describe-addresses \
-            --query "Addresses[?AssociationId==null && Tags[?contains(Value, 'deployhub')]].AllocationId" \
+            --query "Addresses[?AssociationId==null && Tags[?contains(Value, 'shipzen')]].AllocationId" \
             --output text 2>/dev/null || echo "")
             
           for EIP in $EIPS; do

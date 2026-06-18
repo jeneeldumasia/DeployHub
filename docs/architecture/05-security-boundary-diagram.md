@@ -10,7 +10,7 @@ graph TD
         Cloudflare --> AWS_ALB[AWS ALB]
     end
     
-    subgraph DeployHub Platform [Namespace: deployhub-system]
+    subgraph ShipZen Platform [Namespace: shipzen-system]
         AWS_ALB --> Envoy[Envoy Gateway]
         Envoy --> API[API Server]
         API --> Postgres[(PostgreSQL)]
@@ -19,7 +19,7 @@ graph TD
         ESO[External Secrets Operator]
     end
     
-    subgraph Builder Isolation [Namespace: deployhub-build]
+    subgraph Builder Isolation [Namespace: shipzen-build]
         Worker --> Builder[Builder Pods]
         Builder -- IRSA --> ECR[AWS ECR]
         Builder -- NetworkPolicy --> ExternalGit[GitHub]

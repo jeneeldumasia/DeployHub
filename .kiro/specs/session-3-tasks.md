@@ -1,16 +1,16 @@
 # Implementation Plan:
 
 ## Overview
-Complete the missing infrastructure and API server so DeployHub can run end-to-end. Covers Terraform operator installs, Kubernetes Deployment manifests, the FastAPI server, and remaining high-priority bug fixes from the Session 2 audit.
+Complete the missing infrastructure and API server so ShipZen can run end-to-end. Covers Terraform operator installs, Kubernetes Deployment manifests, the FastAPI server, and remaining high-priority bug fixes from the Session 2 audit.
 
 ## Tasks
-- [x] 1. Create `terraform/redis.tf` — Bitnami Redis Helm release, namespace `deployhub-system`, single master, no persistence
-- [x] 2. Create `terraform/postgres.tf` — Bitnami PostgreSQL Helm release, namespace `deployhub-system`, 10Gi PVC, db `deployhub`, writes `deployhub-db-credentials` secret
+- [x] 1. Create `terraform/redis.tf` — Bitnami Redis Helm release, namespace `shipzen-system`, single master, no persistence
+- [x] 2. Create `terraform/postgres.tf` — Bitnami PostgreSQL Helm release, namespace `shipzen-system`, 10Gi PVC, db `shipzen`, writes `shipzen-db-credentials` secret
 - [x] 3. Create `terraform/operators.tf` — KEDA, ESO, and AWS Load Balancer Controller Helm releases with IRSA for ALB Controller
 - [x] 4. Create `terraform/monitoring.tf` — kube-prometheus-stack, namespace `observability`, persistence disabled
-- [x] 5. Add ECR repository `deployhub-builds` and `aws_caller_identity` data source to `terraform/main.tf`; add outputs for `ecr_repository_url`, `build_logs_bucket_name`, `aws_account_id`
+- [x] 5. Add ECR repository `shipzen-builds` and `aws_caller_identity` data source to `terraform/main.tf`; add outputs for `ecr_repository_url`, `build_logs_bucket_name`, `aws_account_id`
 - [x] 6. Scope GitHub Actions IAM role down from `AdministratorAccess` to minimum permissions; restrict subject from wildcard `*` to `ref:refs/heads/main`
-- [x] 7. Create `infra/system/namespace.yaml` — `deployhub-system` namespace with system label
+- [x] 7. Create `infra/system/namespace.yaml` — `shipzen-system` namespace with system label
 - [x] 8. Create `infra/system/schema-configmap.yaml` and `infra/system/schema-job.yaml` — one-shot Job to bootstrap `api/schema.sql` into PostgreSQL on cluster start
 - [x] 9. Create `infra/system/servicemonitors.yaml` — ServiceMonitor and Service resources for worker (8000), controller (9090), and API server (8000)
 - [x] 10. Create `infra/controller/deployment.yaml`, `serviceaccount.yaml`, `kustomization.yaml`

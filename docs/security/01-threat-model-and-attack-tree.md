@@ -1,11 +1,11 @@
 # Platform Threat Model & Attack Tree
 
 ## 1. Trust Boundaries
-DeployHub enforces strict trust boundaries across its architecture:
+ShipZen enforces strict trust boundaries across its architecture:
 - **Untrusted (Internet):** Incoming traffic via Cloudflare/ALB to Envoy Gateway.
 - **Semi-Trusted (Tenant Apps):** User-supplied code executing inside dynamically provisioned Namespaces.
-- **Semi-Trusted (Builder Pool):** The `deployhub-build` namespace executing untrusted source code and `Dockerfile` configurations.
-- **Trusted (Control Plane):** The Controller, Worker, PostgreSQL database, and Redis Streams inside `deployhub-system`.
+- **Semi-Trusted (Builder Pool):** The `shipzen-build` namespace executing untrusted source code and `Dockerfile` configurations.
+- **Trusted (Control Plane):** The Controller, Worker, PostgreSQL database, and Redis Streams inside `shipzen-system`.
 
 ## 2. Attack Tree Analysis
 
@@ -23,7 +23,7 @@ The following tree outlines potential attack vectors and the implemented mitigat
 ### B. Malicious Build Execution
 - **Goal:** Malicious code executes during the CI build phase to steal credentials or pivot into the cluster.
 - **Attack Vector B1:** Executing arbitrary code during `kaniko` or `pack` build.
-  - *Mitigation:* Builder pods are completely isolated in `deployhub-build` namespace with identical NetworkPolicies and PSS hardening.
+  - *Mitigation:* Builder pods are completely isolated in `shipzen-build` namespace with identical NetworkPolicies and PSS hardening.
   - *Mitigation:* NodePool taints ensure builders run on isolated instances (Spot).
 - **Attack Vector B2:** Accessing long-lived registry credentials.
   - *Mitigation:* IRSA (IAM Roles for Service Accounts) provides short-lived AWS STS tokens to access ECR. No long-lived Kubernetes Secrets exist.

@@ -1,5 +1,5 @@
 """
-DeployHub API Server — Phase 16
+ShipZen API Server — Phase 16
 FastAPI service that is the sole HTTP entry point for the platform.
 All state-changing operations write to PostgreSQL and enqueue to Redis.
 The controller and worker drive everything asynchronously from there.
@@ -37,7 +37,7 @@ logger = logging.getLogger('api')
 
 # ── Config ────────────────────────────────────────────────────────────────────
 
-REDIS_HOST  = os.getenv("REDIS_HOST", "redis-master.deployhub-system.svc.cluster.local")
+REDIS_HOST  = os.getenv("REDIS_HOST", "redis-master.shipzen-system.svc.cluster.local")
 REDIS_PORT  = int(os.getenv("REDIS_PORT", "6379"))
 STREAM_NAME = os.getenv("STREAM_NAME", "deploy_stream")
 
@@ -64,7 +64,7 @@ def get_redis() -> redis_lib.Redis:
 # ── FastAPI app ───────────────────────────────────────────────────────────────
 
 app = FastAPI(
-    title="DeployHub API",
+    title="ShipZen API",
     description="Internal Developer Platform — deploy any repo to Kubernetes",
     version="1.0.0",
 )
@@ -279,10 +279,10 @@ def create_deployment(request: Request, project_id: str, body: CreateDeploymentR
     if ECR_REPOSITORY_URL:
         # Base registry e.g. 123456789012.dkr.ecr.region.amazonaws.com
         base_registry = ECR_REPOSITORY_URL.split("/")[0]
-        image_uri = f"{base_registry}/deployhub-builds/{project_id}:{deployment_id}"
+        image_uri = f"{base_registry}/shipzen-builds/{project_id}:{deployment_id}"
     else:
         # Local dev / testing fallback — no ECR configured
-        image_uri = f"local/deployhub-builds/{project_id}:{deployment_id}"
+        image_uri = f"local/shipzen-builds/{project_id}:{deployment_id}"
 
     try:
         with get_connection() as conn:
@@ -582,7 +582,7 @@ def get_global_audit_logs(
 @limiter.limit("100/minute")
 def get_env_vars(request: Request, project_id: str, current_user: User = Depends(get_current_user)):
     project = _get_project_or_404(project_id, current_user)
-    secret_id = f"deployhub/{project['name']}/"
+    secret_id = f"shipzen/{project['name']}/"
     sm = boto3.client('secretsmanager')
     try:
         # We only return the keys, not the values for security
@@ -606,7 +606,7 @@ def put_env_var(request: Request, project_id: str, body: dict, current_user: Use
     if not key or not value:
         raise HTTPException(status_code=400, detail="Missing key or value")
         
-    secret_id = f"deployhub/{project['name']}/"
+    secret_id = f"shipzen/{project['name']}/"
     sm = boto3.client('secretsmanager')
     import json
     
@@ -641,7 +641,7 @@ def put_env_var(request: Request, project_id: str, body: dict, current_user: Use
 @limiter.limit("20/minute")
 def delete_env_var(request: Request, project_id: str, key: str, current_user: User = Depends(get_current_user)):
     project = _get_project_or_404(project_id, current_user)
-    secret_id = f"deployhub/{project['name']}/"
+    secret_id = f"shipzen/{project['name']}/"
     sm = boto3.client('secretsmanager')
     import json
     
@@ -718,9 +718,9 @@ async def github_webhook(request: Request, project_id: str):
     queued_at = str(time.time())
     if ECR_REPOSITORY_URL:
         base_registry = ECR_REPOSITORY_URL.split("/")[0]
-        image_uri = f"{base_registry}/deployhub-builds/{project_id}:{deployment_id}"
+        image_uri = f"{base_registry}/shipzen-builds/{project_id}:{deployment_id}"
     else:
-        image_uri = f"local/deployhub-builds/{project_id}:{deployment_id}"
+        image_uri = f"local/shipzen-builds/{project_id}:{deployment_id}"
     
     try:
         with get_connection() as conn:

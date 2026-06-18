@@ -1,7 +1,7 @@
 import os
 from pathlib import Path
 
-docs_dir = Path("c:/Project/DeployHub/docs")
+docs_dir = Path("c:/Project/ShipZen/docs")
 for md_file in docs_dir.rglob("*.md"):
     if md_file.name == "0002-database-design.md":
         content = """# ADR 0002: Database Design

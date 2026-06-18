@@ -1,8 +1,8 @@
 locals {
-  pg_database = "deployhub"
-  pg_username = "deployhub"
-  pg_password = "deployhub-secret-change-me"  # Overridden by var.pg_password in prod
-  pg_host     = "postgres-postgresql.deployhub-system.svc.cluster.local"
+  pg_database = "shipzen"
+  pg_username = "shipzen"
+  pg_password = "shipzen-secret-change-me"  # Overridden by var.pg_password in prod
+  pg_host     = "postgres-postgresql.shipzen-system.svc.cluster.local"
   pg_port     = 5432
 }
 
@@ -19,7 +19,7 @@ resource "helm_release" "postgresql" {
   repository       = "oci://registry-1.docker.io/bitnamicharts"
   chart            = "postgresql"
   version          = "18.7.3"
-  namespace        = "deployhub-system"
+  namespace        = "shipzen-system"
   create_namespace = true
 
   # Fix: explicitly set gp2 StorageClass.
@@ -86,8 +86,8 @@ resource "helm_release" "postgresql" {
 # Full DATABASE_URL connection string — all services mount this as an env var.
 resource "kubernetes_secret" "db_credentials" {
   metadata {
-    name      = "deployhub-db-credentials"
-    namespace = "deployhub-system"
+    name      = "shipzen-db-credentials"
+    namespace = "shipzen-system"
   }
 
   data = {
@@ -100,8 +100,8 @@ resource "kubernetes_secret" "db_credentials" {
 # S3 bucket name for build logs — mounted by builder as S3_LOG_BUCKET.
 resource "kubernetes_secret" "s3_config" {
   metadata {
-    name      = "deployhub-s3-config"
-    namespace = "deployhub-system"
+    name      = "shipzen-s3-config"
+    namespace = "shipzen-system"
   }
 
   data = {
@@ -116,8 +116,8 @@ resource "kubernetes_secret" "s3_config" {
 # Controller: passes ECR_REGISTRY to tenant namespace template for imagePullSecrets
 resource "kubernetes_secret" "ecr_config" {
   metadata {
-    name      = "deployhub-ecr-config"
-    namespace = "deployhub-system"
+    name      = "shipzen-ecr-config"
+    namespace = "shipzen-system"
   }
 
   data = {

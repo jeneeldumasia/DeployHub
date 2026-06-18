@@ -1,5 +1,5 @@
 /**
- * DeployHub API client
+ * ShipZen API client
  * All calls go through Next.js API routes (/api/*) which proxy to the
  * backend API server — this keeps the backend URL server-side only.
  */
@@ -13,7 +13,7 @@ if (typeof window !== "undefined") {
   }
 } else {
   if (process.env.KUBERNETES_SERVICE_HOST) {
-    BASE = "http://deployhub-api.deployhub-system.svc.cluster.local:80";
+    BASE = "http://shipzen-api.shipzen-system.svc.cluster.local:80";
   } else {
     BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
   }

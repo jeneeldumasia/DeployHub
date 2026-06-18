@@ -2,18 +2,18 @@
 apiVersion: karpenter.k8s.aws/v1
 kind: EC2NodeClass
 metadata:
-  name: deployhub-default
+  name: shipzen-default
 spec:
   # v1 requires amiSelectorTerms instead of amiFamily
   amiSelectorTerms:
     - alias: al2023@latest
-  role: "DeployHubKarpenterNodeRole"
+  role: "ShipZenKarpenterNodeRole"
   subnetSelectorTerms:
     - tags:
-        karpenter.sh/discovery: "DeployHub"
+        karpenter.sh/discovery: "ShipZen"
   securityGroupSelectorTerms:
     - tags:
-        karpenter.sh/discovery: "DeployHub"
+        karpenter.sh/discovery: "ShipZen"
 ---
 # Builder NodePool — dedicated to build jobs, tainted to prevent other workloads
 apiVersion: karpenter.sh/v1
@@ -36,9 +36,9 @@ spec:
       nodeClassRef:
         group: karpenter.k8s.aws
         kind: EC2NodeClass
-        name: deployhub-default
+        name: shipzen-default
       taints:
-        - key: deployhub.jeneeldumasia.codes/dedicated
+        - key: shipzen.jeneeldumasia.codes/dedicated
           value: builder
           effect: NoSchedule
   disruption:
@@ -69,9 +69,9 @@ spec:
       nodeClassRef:
         group: karpenter.k8s.aws
         kind: EC2NodeClass
-        name: deployhub-default
+        name: shipzen-default
       taints:
-        - key: deployhub.jeneeldumasia.codes/dedicated
+        - key: shipzen.jeneeldumasia.codes/dedicated
           value: tenant
           effect: NoSchedule
   disruption:

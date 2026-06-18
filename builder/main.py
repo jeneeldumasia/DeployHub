@@ -15,13 +15,13 @@ from prometheus_client import Histogram, start_http_server
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger('builder')
 
-deployhub_build_duration_seconds = Histogram(
-    'deployhub_build_duration_seconds',
+shipzen_build_duration_seconds = Histogram(
+    'shipzen_build_duration_seconds',
     'Build duration from clone to push',
     buckets=[30, 60, 120, 300, 600, 900]
 )
 
-REDIS_HOST    = os.getenv("REDIS_HOST", "redis-master.deployhub-system.svc.cluster.local")
+REDIS_HOST    = os.getenv("REDIS_HOST", "redis-master.shipzen-system.svc.cluster.local")
 REDIS_PORT    = int(os.getenv("REDIS_PORT", "6379"))
 BUILDER_QUEUE = os.getenv("BUILDER_QUEUE_NAME", "builder_queue")   # Fix #7: matches config key
 CONSUMER_GROUP = os.getenv("CONSUMER_GROUP", "builder_group")
@@ -128,8 +128,8 @@ def run_build(deployment_id: str, repo_url: str, branch: str, image_name: str):
 
         s3_log_key = f"logs/{deployment_id}/build.log"
 
-        # Check for deployhub.yaml overrides
-        config_path = os.path.join(workspace, "deployhub.yaml")
+        # Check for shipzen.yaml overrides
+        config_path = os.path.join(workspace, "shipzen.yaml")
         pack_args = []
         if os.path.exists(config_path):
             try:
@@ -148,13 +148,13 @@ def run_build(deployment_id: str, repo_url: str, branch: str, image_name: str):
                             elif new_health:
                                 cur.execute("UPDATE deployments SET health_check_path = %s WHERE deployment_id = %s;", (new_health, deployment_id))
                         conn.close()
-                        logger.info(f"Updated deployment overrides from deployhub.yaml: port={new_port}, health_check_path={new_health}")
+                        logger.info(f"Updated deployment overrides from shipzen.yaml: port={new_port}, health_check_path={new_health}")
                     
                     runtime = config.get("runtime")
                     if runtime:
                         pack_args.extend(["--buildpack", runtime])
             except Exception as e:
-                logger.warning(f"Failed to parse deployhub.yaml: {e}")
+                logger.warning(f"Failed to parse shipzen.yaml: {e}")
 
         # Task 16 / fix #4.4: Kaniko removed entirely.
         # Kaniko requires filesystem overlay capabilities that are incompatible
@@ -206,11 +206,11 @@ def run_build(deployment_id: str, repo_url: str, branch: str, image_name: str):
 
         try:
             stdout_bytes, _ = process.communicate(timeout=BUILD_TIMEOUT_SECONDS)
-            deployhub_build_duration_seconds.observe(time.time() - build_start)
+            shipzen_build_duration_seconds.observe(time.time() - build_start)
         except subprocess.TimeoutExpired:
             process.kill()
             stdout_bytes, _ = process.communicate()
-            deployhub_build_duration_seconds.observe(time.time() - build_start)
+            shipzen_build_duration_seconds.observe(time.time() - build_start)
             logger.error(f"Build {deployment_id} timed out after {BUILD_TIMEOUT_SECONDS}s.")
             record_build(deployment_id, s3_log_key, "Failed")
             update_db_state(deployment_id, "Failed", "Build timed out.")
@@ -230,7 +230,7 @@ def run_build(deployment_id: str, repo_url: str, branch: str, image_name: str):
             try:
                 ecr = boto3.client('ecr')
                 # Use rsplit to safely handle any number of slashes in the registry hostname
-                # e.g. "123456789012.dkr.ecr.us-east-1.amazonaws.com/deployhub-builds:abc123"
+                # e.g. "123456789012.dkr.ecr.us-east-1.amazonaws.com/shipzen-builds:abc123"
                 registry_and_repo, image_tag = image_name.rsplit(':', 1)
                 repo_name = registry_and_repo.split('/', 1)[1]  # strip the registry prefix
                 

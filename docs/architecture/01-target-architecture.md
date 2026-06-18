@@ -6,7 +6,7 @@ graph TD
     CF --> ALB[AWS ALB]
     ALB --> EG[Envoy Gateway - Gateway API]
     
-    subgraph DeployHub Control Plane
+    subgraph ShipZen Control Plane
         EG --> API[API Server]
         API --> Redis[Redis Streams - Queue]
         API --> Postgres[(PostgreSQL - Source of Truth)]

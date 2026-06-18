@@ -121,7 +121,7 @@ export default function NewDeploymentPage() {
                 />
                 <p className="text-xs text-text-secondary mt-1.5">
                   The port your app listens on. Defaults to 8080.
-                  Can also be set via <code className="bg-slate-100 px-1 rounded">deployhub.yaml</code> in your repo.
+                  Can also be set via <code className="bg-slate-100 px-1 rounded">shipzen.yaml</code> in your repo.
                 </p>
               </div>
             </div>

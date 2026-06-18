@@ -1,6 +1,6 @@
-# DeployHub — Production Internal Developer Platform (IDP)
+# ShipZen — Production Internal Developer Platform (IDP)
 
-DeployHub is an enterprise-grade Internal Developer Platform built from scratch to orchestrate Kubernetes deployments seamlessly. 
+ShipZen is an enterprise-grade Internal Developer Platform built from scratch to orchestrate Kubernetes deployments seamlessly. 
 
 The platform features strict multi-tenant isolation, native Cloud Native Buildpacks (with Kaniko fallback), an asynchronous Python Controller polling PostgreSQL for state reconciliation, and Envoy Gateway for host-based routing.
 

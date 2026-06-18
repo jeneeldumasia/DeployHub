@@ -1,7 +1,7 @@
 import os
 from pathlib import Path
 
-adr_dir = Path('c:/Project/DeployHub/docs/adr')
+adr_dir = Path('c:/Project/ShipZen/docs/adr')
 
 for file in adr_dir.glob('*.md'):
     content = file.read_text(encoding='utf-8')

@@ -1,37 +1,37 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: deployhub-builder
-  namespace: deployhub-build
+  name: shipzen-builder
+  namespace: shipzen-build
   labels:
-    app: deployhub-builder
+    app: shipzen-builder
 spec:
   replicas: 0 # KEDA scale-to-zero
   selector:
     matchLabels:
-      app: deployhub-builder
+      app: shipzen-builder
   template:
     metadata:
       labels:
-        app: deployhub-builder
+        app: shipzen-builder
     spec:
-      serviceAccountName: deployhub-builder-sa
+      serviceAccountName: shipzen-builder-sa
       securityContext:
         seccompProfile:
           type: RuntimeDefault
         runAsNonRoot: true
         runAsUser: 1000
       # Toleration to schedule on the dedicated builder NodePool.
-      # Builder nodes are tainted deployhub.jeneeldumasia.codes/dedicated=builder:NoSchedule
+      # Builder nodes are tainted shipzen.jeneeldumasia.codes/dedicated=builder:NoSchedule
       # so only pods with this toleration land there.
       tolerations:
-        - key: deployhub.jeneeldumasia.codes/dedicated
+        - key: shipzen.jeneeldumasia.codes/dedicated
           operator: Equal
           value: builder
           effect: NoSchedule
       containers:
         - name: builder
-          image: deployhub-builder:latest
+          image: shipzen-builder:latest
           imagePullPolicy: Always
           securityContext:
             allowPrivilegeEscalation: false
@@ -49,7 +49,7 @@ spec:
               memory: "4Gi"
           env:
             - name: REDIS_HOST
-              value: "redis-master.deployhub-system.svc.cluster.local"
+              value: "redis-master.shipzen-system.svc.cluster.local"
             # Fix #7: key name matches config.BUILDER_QUEUE_NAME
             - name: BUILDER_QUEUE_NAME
               value: "builder_queue"
@@ -58,12 +58,12 @@ spec:
             - name: DATABASE_URL
               valueFrom:
                 secretKeyRef:
-                  name: deployhub-db-credentials
+                  name: shipzen-db-credentials
                   key: url
             - name: S3_LOG_BUCKET
               valueFrom:
                 secretKeyRef:
-                  name: deployhub-s3-config
+                  name: shipzen-s3-config
                   key: bucket_name
             - name: CONSUMER_GROUP
               value: "builder_group"

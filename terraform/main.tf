@@ -1,8 +1,8 @@
 terraform {
   cloud {
-    organization = "jeneel-deployhub" # TODO: Replace with your HCP Terraform organization name
+    organization = "jeneel-shipzen" # TODO: Replace with your HCP Terraform organization name
     workspaces {
-      name = "deployhub-prod"          # TODO: Replace with your HCP Terraform workspace name
+      name = "shipzen-prod"          # TODO: Replace with your HCP Terraform workspace name
     }
   }
 
@@ -43,7 +43,7 @@ module "vpc" {
   source  = "terraform-aws-modules/vpc/aws"
   version = "~> 5.0"
 
-  name = "deployhub-vpc"
+  name = "shipzen-vpc"
   cidr = "10.0.0.0/16"
 
   azs             = ["${var.aws_region}a", "${var.aws_region}b"]
@@ -63,9 +63,9 @@ module "vpc" {
 
   tags = {
     Environment                                    = "dev"
-    Project                                        = "DeployHub"
-    "kubernetes.io/cluster/deployhub-cluster"      = "shared"
-    "karpenter.sh/discovery"                       = "DeployHub"
+    Project                                        = "ShipZen"
+    "kubernetes.io/cluster/shipzen-cluster"      = "shared"
+    "karpenter.sh/discovery"                       = "ShipZen"
   }
 }
 
@@ -74,7 +74,7 @@ module "eks" {
   source  = "terraform-aws-modules/eks/aws"
   version = "~> 20.31"
 
-  cluster_name    = "deployhub-cluster"
+  cluster_name    = "shipzen-cluster"
   cluster_version = "1.36"
 
   vpc_id                   = module.vpc.vpc_id
@@ -93,7 +93,7 @@ module "eks" {
       ami_type       = "AL2023_x86_64_STANDARD"
 
       labels = {
-        "deployhub.jeneeldumasia.codes/node-type" = "platform"
+        "shipzen.jeneeldumasia.codes/node-type" = "platform"
       }
     }
   }
@@ -128,7 +128,7 @@ module "eks" {
 module "ebs_csi_irsa_role" {
   source                = "terraform-aws-modules/iam/aws//modules/iam-role-for-service-accounts-eks"
   version               = "~> 5.0"
-  role_name             = "DeployHubEBSCSIDriver"
+  role_name             = "ShipZenEBSCSIDriver"
   attach_ebs_csi_policy = true
 
   oidc_providers = {
@@ -167,7 +167,7 @@ provider "kubectl" {
 # Task 5: ECR repo for built tenant images.
 # Builder pushes here; tenant pods pull from here via IRSA.
 resource "aws_ecr_repository" "builds" {
-  name                 = "deployhub-builds"
+  name                 = "shipzen-builds"
   image_tag_mutability = "IMMUTABLE"
 
   image_scanning_configuration {
@@ -183,18 +183,18 @@ module "irsa_builder" {
   source  = "terraform-aws-modules/iam/aws//modules/iam-role-for-service-accounts-eks"
   version = "~> 5.0"
 
-  role_name = "DeployHubBuilderRole"
+  role_name = "ShipZenBuilderRole"
 
   oidc_providers = {
     main = {
       provider_arn               = module.eks.oidc_provider_arn
-      namespace_service_accounts = ["deployhub-build:deployhub-builder-sa"]
+      namespace_service_accounts = ["shipzen-build:shipzen-builder-sa"]
     }
   }
 }
 
 resource "aws_iam_role_policy" "builder_ecr" {
-  name = "DeployHubBuilderECRPolicy"
+  name = "ShipZenBuilderECRPolicy"
   role = module.irsa_builder.iam_role_name
   policy = jsonencode({
     Version = "2012-10-17"
@@ -208,9 +208,9 @@ resource "aws_iam_role_policy" "builder_ecr" {
   })
 }
 
-resource "kubernetes_namespace" "deployhub_build" {
+resource "kubernetes_namespace" "shipzen_build" {
   metadata {
-    name = "deployhub-build"
+    name = "shipzen-build"
     labels = {
       "pod-security.kubernetes.io/enforce"         = "restricted"
       "pod-security.kubernetes.io/enforce-version" = "latest"
@@ -224,8 +224,8 @@ resource "kubernetes_namespace" "deployhub_build" {
 
 resource "kubernetes_service_account" "builder_sa" {
   metadata {
-    name      = "deployhub-builder-sa"
-    namespace = kubernetes_namespace.deployhub_build.metadata[0].name
+    name      = "shipzen-builder-sa"
+    namespace = kubernetes_namespace.shipzen_build.metadata[0].name
     annotations = {
       "eks.amazonaws.com/role-arn" = module.irsa_builder.iam_role_arn
     }
@@ -238,7 +238,7 @@ resource "kubernetes_service_account" "builder_sa" {
 # ── Cloudflare API Token Secret ───────────────────────────────────────────────
 # Used by External Secrets Operator to inject Cloudflare credentials for Cert-Manager
 resource "aws_secretsmanager_secret" "cloudflare_api_token" {
-  name                    = "deployhub/cloudflare-api-token"
+  name                    = "shipzen/cloudflare-api-token"
   recovery_window_in_days = 0
 }
 
@@ -249,7 +249,7 @@ resource "aws_secretsmanager_secret_version" "cloudflare_api_token" {
 
 # ── S3 Bucket for Build Logs ─────────────────────────────────────────────────
 resource "aws_s3_bucket" "build_logs" {
-  bucket_prefix = "deployhub-build-logs-"
+  bucket_prefix = "shipzen-build-logs-"
   force_destroy = true # Required for terraform destroy to succeed on non-empty bucket
 }
 
@@ -274,7 +274,7 @@ data "aws_iam_policy_document" "github_actions_policy" {
     effect  = "Allow"
     actions = ["eks:DescribeCluster", "eks:ListClusters", "eks:UpdateClusterConfig"]
     resources = [
-      "arn:aws:eks:${var.aws_region}:${data.aws_caller_identity.current.account_id}:cluster/deployhub-cluster"
+      "arn:aws:eks:${var.aws_region}:${data.aws_caller_identity.current.account_id}:cluster/shipzen-cluster"
     ]
   }
 
@@ -332,8 +332,8 @@ data "aws_iam_policy_document" "github_actions_policy" {
 }
 
 resource "aws_iam_policy" "github_actions" {
-  name        = "DeployHubGitHubActionsPolicy"
-  description = "Minimum permissions for DeployHub GitHub Actions CI/CD"
+  name        = "ShipZenGitHubActionsPolicy"
+  description = "Minimum permissions for ShipZen GitHub Actions CI/CD"
   policy      = data.aws_iam_policy_document.github_actions_policy.json
 }
 
@@ -342,10 +342,10 @@ module "iam_github_oidc_role" {
   version = "~> 5.0"
 
   # Task 6: restricted to main branch only — PR branches from forks cannot assume this role
-  subjects = ["repo:jeneeldumasia/DeployHub:ref:refs/heads/main"]
+  subjects = ["repo:jeneeldumasia/ShipZen:ref:refs/heads/main"]
 
   policies = {
-    DeployHubGitHubActionsPolicy = aws_iam_policy.github_actions.arn
+    ShipZenGitHubActionsPolicy = aws_iam_policy.github_actions.arn
   }
 
   depends_on = [aws_iam_policy.github_actions]
@@ -391,9 +391,9 @@ module "karpenter" {
   enable_irsa          = true
   irsa_oidc_provider_arn = module.eks.oidc_provider_arn
   create_iam_role      = true
-  iam_role_name        = "DeployHubKarpenterController"
+  iam_role_name        = "ShipZenKarpenterController"
   create_node_iam_role = true
-  node_iam_role_name   = "DeployHubKarpenterNodeRole"
+  node_iam_role_name   = "ShipZenKarpenterNodeRole"
   create_access_entry  = true
   
   node_iam_role_additional_policies = {

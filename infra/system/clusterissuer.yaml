@@ -3,7 +3,7 @@ kind: ClusterIssuer
 metadata:
   name: letsencrypt-prod
   labels:
-    deployhub.jeneeldumasia.codes/system: "true"
+    shipzen.jeneeldumasia.codes/system: "true"
 spec:
   acme:
     email: admin@jeneeldumasia.codes

@@ -10,9 +10,9 @@ from kubernetes.client.rest import ApiException
 from kubernetes.utils import create_from_yaml
 from models import ProjectStatus, ProjectSchema
 from metrics import (
-    deployhub_drift_total, 
-    deployhub_reconciliation_duration_seconds, 
-    deployhub_deployment_success_total,
+    shipzen_drift_total, 
+    shipzen_reconciliation_duration_seconds, 
+    shipzen_deployment_success_total,
     start_metrics_server
 )
 
@@ -159,7 +159,7 @@ def delete_namespace(namespace: str):
             raise
 
 
-@deployhub_reconciliation_duration_seconds.time()
+@shipzen_reconciliation_duration_seconds.time()
 def reconcile():
     logger.info("Starting reconciliation loop...")
     conn = get_db_connection()
@@ -216,7 +216,7 @@ def reconcile():
     
                         elif project.status == ProjectStatus.READY:
                             if not check_namespace_exists(project.namespace):
-                                deployhub_drift_total.inc()
+                                shipzen_drift_total.inc()
                                 logger.warning(f"Drift detected! Namespace {project.namespace} missing for Ready project.")
                                 project_cur.execute(
                                     "UPDATE projects SET status = %s WHERE id = %s;",
@@ -250,7 +250,7 @@ def reconcile_deployments(conn, cur, project):
         for d_id, db_dep in db_deployments.items():
             if db_dep['state'] in ['Running', 'Verifying', 'Deploying']:
                 if d_id not in k8s_dep_names:
-                    deployhub_drift_total.inc()
+                    shipzen_drift_total.inc()
                     logger.warning(f"Drift: Deployment {d_id} missing in K8s. Recreating...")
                     template = jinja_env.get_template("app-deployment.yaml.j2")
                     manifests = template.render(
@@ -268,7 +268,7 @@ def reconcile_deployments(conn, cur, project):
                     k8s_dep = k8s_dep_names[d_id]
                     ready_replicas = k8s_dep.status.ready_replicas or 0
                     if ready_replicas == 0 and db_dep['state'] == 'Running':
-                        deployhub_drift_total.inc()
+                        shipzen_drift_total.inc()
                         logger.warning(f"Drift: Deployment {d_id} is failing in K8s.")
                         cur.execute(
                             "UPDATE deployments SET state = %s, last_error = %s WHERE deployment_id = %s;",
@@ -282,12 +282,12 @@ def reconcile_deployments(conn, cur, project):
                             ('Running', d_id)
                         )
                         conn.commit()
-                        deployhub_deployment_success_total.inc()
+                        shipzen_deployment_success_total.inc()
 
         # 2. Orphan Resources Cleanup
         for k8s_name in k8s_dep_names.keys():
             if k8s_name not in db_deployments or db_deployments[k8s_name]['state'] not in ['Running', 'Verifying', 'Deploying']:
-                deployhub_drift_total.inc()
+                shipzen_drift_total.inc()
                 logger.warning(f"Drift: Orphan Deployment {k8s_name} found in K8s. Cleaning up...")
                 k8s_apps_api.delete_namespaced_deployment(name=k8s_name, namespace=project.namespace)
                 try:

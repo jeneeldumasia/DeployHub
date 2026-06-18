@@ -1,9 +1,9 @@
 apiVersion: v1
 kind: Namespace
 metadata:
-  name: deployhub-system
+  name: shipzen-system
   labels:
-    deployhub.jeneeldumasia.codes/system: "true"
+    shipzen.jeneeldumasia.codes/system: "true"
     # Allow platform pods to run without the restricted PSS
     # (worker, controller, and API server are trusted platform components)
     pod-security.kubernetes.io/enforce: baseline

@@ -15,15 +15,15 @@ resources:
   - ui/
 
 images:
-  - name: deployhub-api
-    newName: ghcr.io/jeneeldumasia/deployhub-api
+  - name: shipzen-api
+    newName: ghcr.io/jeneeldumasia/shipzen-api
     newTag: latest
-  - name: deployhub-controller
-    newName: ghcr.io/jeneeldumasia/deployhub-controller
+  - name: shipzen-controller
+    newName: ghcr.io/jeneeldumasia/shipzen-controller
     newTag: latest
-  - name: deployhub-worker
-    newName: ghcr.io/jeneeldumasia/deployhub-worker
+  - name: shipzen-worker
+    newName: ghcr.io/jeneeldumasia/shipzen-worker
     newTag: latest
-  - name: deployhub-ui
-    newName: ghcr.io/jeneeldumasia/deployhub-ui
+  - name: shipzen-ui
+    newName: ghcr.io/jeneeldumasia/shipzen-ui
     newTag: latest

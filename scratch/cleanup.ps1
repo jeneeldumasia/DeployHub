@@ -1,23 +1,23 @@
 $ErrorActionPreference = "SilentlyContinue"
 
 Write-Host "Deleting ECR Repository..."
-aws ecr delete-repository --repository-name "deployhub-builds" --force
+aws ecr delete-repository --repository-name "shipzen-builds" --force
 
 Write-Host "Deleting IAM Policies..."
-$policies = @("DeployHubGitHubActionsPolicy", "DeployHubALBControllerPolicy")
+$policies = @("ShipZenGitHubActionsPolicy", "ShipZenALBControllerPolicy")
 foreach ($p in $policies) {
     $arn = "arn:aws:iam::952994886652:policy/$p"
     aws iam delete-policy --policy-arn $arn
 }
 
 Write-Host "Deleting CloudWatch Log Group..."
-aws logs delete-log-group --log-group-name "/aws/eks/deployhub-cluster/cluster"
+aws logs delete-log-group --log-group-name "/aws/eks/shipzen-cluster/cluster"
 
 Write-Host "Deleting KMS Alias..."
-aws kms delete-alias --alias-name "alias/eks/deployhub-cluster"
+aws kms delete-alias --alias-name "alias/eks/shipzen-cluster"
 
 Write-Host "Finding and Deleting VPCs..."
-$vpcs = aws ec2 describe-vpcs --filters "Name=tag:Name,Values=deployhub-vpc" --query "Vpcs[*].VpcId" --output text
+$vpcs = aws ec2 describe-vpcs --filters "Name=tag:Name,Values=shipzen-vpc" --query "Vpcs[*].VpcId" --output text
 if ($vpcs) {
     $vpcList = $vpcs -split '\s+'
     foreach ($vpc in $vpcList) {

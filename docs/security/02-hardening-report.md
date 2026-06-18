@@ -1,9 +1,9 @@
 # Platform Hardening Report
 
-This report summarizes the definitive security controls configured and enforced globally across DeployHub.
+This report summarizes the definitive security controls configured and enforced globally across ShipZen.
 
 ## 1. Workload Isolation
-- **Restricted Pod Security Standards (PSS):** Enforced natively on all dynamically generated tenant namespaces and the static `deployhub-build` namespace via `pod-security.kubernetes.io/enforce: restricted`.
+- **Restricted Pod Security Standards (PSS):** Enforced natively on all dynamically generated tenant namespaces and the static `shipzen-build` namespace via `pod-security.kubernetes.io/enforce: restricted`.
 - **Security Contexts:**
   - `runAsNonRoot: true` and `runAsUser: 1000` mandated.
   - `allowPrivilegeEscalation: false` applied.

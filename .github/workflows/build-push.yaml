@@ -44,7 +44,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.REGISTRY }}/${{ steps.string.outputs.lowercase }}/deployhub-${{ matrix.component }}
+          images: ${{ env.REGISTRY }}/${{ steps.string.outputs.lowercase }}/shipzen-${{ matrix.component }}
           tags: |
             type=sha,format=long
             type=raw,value=latest

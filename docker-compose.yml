@@ -9,13 +9,13 @@ services:
   postgres:
     image: postgres:15-alpine
     environment:
-      POSTGRES_DB: deployhub
-      POSTGRES_USER: deployhub
-      POSTGRES_PASSWORD: deployhub-local
+      POSTGRES_DB: shipzen
+      POSTGRES_USER: shipzen
+      POSTGRES_PASSWORD: shipzen-local
     ports:
       - "5432:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U deployhub -d deployhub"]
+      test: ["CMD-SHELL", "pg_isready -U shipzen -d shipzen"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -40,13 +40,13 @@ services:
     ports:
       - "8000:8000"
     environment:
-      DATABASE_URL: postgresql://deployhub:deployhub-local@postgres:5432/deployhub
+      DATABASE_URL: postgresql://shipzen:shipzen-local@postgres:5432/shipzen
       REDIS_HOST: redis
       REDIS_PORT: "6379"
       STREAM_NAME: deploy_stream
       # In production this is set from `terraform output ecr_repository_url`
       # For local testing a placeholder is fine — builder isn't running locally
-      ECR_REPOSITORY_URL: "local/deployhub-builds"
+      ECR_REPOSITORY_URL: "local/shipzen-builds"
     depends_on:
       postgres:
         condition: service_healthy

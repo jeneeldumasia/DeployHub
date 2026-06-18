@@ -1,7 +1,7 @@
 import logging
 import redis
 from config import config
-from metrics import deployhub_queue_depth, deployhub_dlq_depth
+from metrics import shipzen_queue_depth, shipzen_dlq_depth
 
 logger = logging.getLogger(__name__)
 
@@ -59,8 +59,8 @@ class QueueClient:
             info = self.r.xinfo_groups(self.stream)
             for g in info:
                 if g['name'] == self.group:
-                    deployhub_queue_depth.set(g['pending'])
+                    shipzen_queue_depth.set(g['pending'])
             dlq_len = self.r.xlen(self.dlq_stream)
-            deployhub_dlq_depth.set(dlq_len)
+            shipzen_dlq_depth.set(dlq_len)
         except Exception:
             pass

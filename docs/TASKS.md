@@ -1,4 +1,4 @@
-# DeployHub — Task Backlog
+# ShipZen — Task Backlog
 
 > Canonical source of upcoming work. Ordered by priority within each section.
 > Format: `[ ]` = not started, `[~]` = in progress, `[x]` = done
@@ -13,18 +13,18 @@
 
 | Hostname | Purpose |
 |----------|---------|
-| `deployhub.jeneeldumasia.codes` | DeployHub UI + API (CNAME → NLB) |
-| `api.deployhub.jeneeldumasia.codes` | API server direct access |
-| `grafana.deployhub.jeneeldumasia.codes` | Grafana dashboard |
-| `*.deployhub.jeneeldumasia.codes` | Wildcard — all user app deployments |
-| `{dep-id}.{project}.deployhub.jeneeldumasia.codes` | Per-deployment URL (e.g. `a1b2c3d4.my-app.deployhub.jeneeldumasia.codes`) |
+| `shipzen.jeneeldumasia.codes` | ShipZen UI + API (CNAME → NLB) |
+| `api.shipzen.jeneeldumasia.codes` | API server direct access |
+| `grafana.shipzen.jeneeldumasia.codes` | Grafana dashboard |
+| `*.shipzen.jeneeldumasia.codes` | Wildcard — all user app deployments |
+| `{dep-id}.{project}.shipzen.jeneeldumasia.codes` | Per-deployment URL (e.g. `a1b2c3d4.my-app.shipzen.jeneeldumasia.codes`) |
 
 **Setup:**
-- In your domain registrar / Route53, create a CNAME: `*.deployhub.jeneeldumasia.codes` → NLB DNS name (output from `terraform output nlb_dns_name` after deploy)
-- cert-manager issues a wildcard cert for `*.deployhub.jeneeldumasia.codes` via DNS-01 challenge on Route53
-- The double-wildcard `*.{project}.deployhub.jeneeldumasia.codes` requires a separate cert or a SAN cert covering both levels — Let's Encrypt supports this via DNS-01
+- In your domain registrar / Route53, create a CNAME: `*.shipzen.jeneeldumasia.codes` → NLB DNS name (output from `terraform output nlb_dns_name` after deploy)
+- cert-manager issues a wildcard cert for `*.shipzen.jeneeldumasia.codes` via DNS-01 challenge on Route53
+- The double-wildcard `*.{project}.shipzen.jeneeldumasia.codes` requires a separate cert or a SAN cert covering both levels — Let's Encrypt supports this via DNS-01
 
-**Everywhere `deployhub.io` appears in the codebase, replace with `deployhub.jeneeldumasia.codes`:**
+**Everywhere `shipzen.io` appears in the codebase, replace with `shipzen.jeneeldumasia.codes`:**
 - `gateway/gateway.yaml` — gateway hostname
 - `controller/templates/app-deployment.yaml.j2` — HTTPRoute hostname
 - `terraform/main.tf` — any hardcoded domain references
@@ -53,34 +53,34 @@
   - `middleware.ts` — redirect unauthenticated users to `/login`
   - Pass `session.accessToken` as `Authorization: Bearer` on all API calls
   - Show user avatar + name in sidebar footer; replace "Connected" indicator
-- **Admin role:** `https://deployhub.jeneeldumasia.codes/roles` claim in JWT. Admins see all projects across all users.
+- **Admin role:** `https://shipzen.jeneeldumasia.codes/roles` claim in JWT. Admins see all projects across all users.
 - **Env vars needed:** `AUTH0_DOMAIN`, `AUTH0_CLIENT_ID`, `AUTH0_CLIENT_SECRET`, `AUTH0_AUDIENCE` — add to `infra/api/deployment.yaml` as Secret refs and `ui` deployment.
 
 ---
 
 ### DNS-1: Fix Per-Deployment Wildcard Routing + Domain Update
 **Why:** Two bugs combined:
-1. All deployments in a project share `{project_name}.deployhub.jeneeldumasia.codes` — duplicate HTTPRoutes cause undefined routing behaviour
-2. The domain is still `deployhub.io` throughout the codebase
+1. All deployments in a project share `{project_name}.shipzen.jeneeldumasia.codes` — duplicate HTTPRoutes cause undefined routing behaviour
+2. The domain is still `shipzen.io` throughout the codebase
 
 **Fix:**
 
 Update `controller/templates/app-deployment.yaml.j2` hostname to:
 ```
-{{ deployment_id[:8] }}.{{ project_name }}.deployhub.jeneeldumasia.codes
+{{ deployment_id[:8] }}.{{ project_name }}.shipzen.jeneeldumasia.codes
 ```
 
 Update `gateway/gateway.yaml` listeners to:
 ```yaml
-hostname: "*.deployhub.jeneeldumasia.codes"
+hostname: "*.shipzen.jeneeldumasia.codes"
 ```
 
-Add `NEXT_PUBLIC_APP_DOMAIN=deployhub.jeneeldumasia.codes` env var to the UI so the deployment detail page can construct live URLs client-side.
+Add `NEXT_PUBLIC_APP_DOMAIN=shipzen.jeneeldumasia.codes` env var to the UI so the deployment detail page can construct live URLs client-side.
 
 ---
 
 ### INFRA-1: cert-manager + Wildcard TLS Certificate
-**Why:** `gateway/gateway.yaml` references `deployhub-tls-cert` Secret which is never created. The HTTPS listener will fail to start, breaking all tenant traffic.
+**Why:** `gateway/gateway.yaml` references `shipzen-tls-cert` Secret which is never created. The HTTPS listener will fail to start, breaking all tenant traffic.
 
 **Fix:**
 - Add to `terraform/operators.tf`:
@@ -99,7 +99,7 @@ Add `NEXT_PUBLIC_APP_DOMAIN=deployhub.jeneeldumasia.codes` env var to the UI so 
 - Add Route53 IRSA role for DNS-01 challenge (needs `route53:ChangeResourceRecordSets` on the hosted zone)
 - Add to `infra/system/`:
   - `clusterissuer.yaml` — Let's Encrypt production issuer using Route53 DNS-01
-  - `certificate.yaml` — wildcard cert for `*.deployhub.jeneeldumasia.codes` stored as `deployhub-tls-cert` in `deployhub-system` namespace
+  - `certificate.yaml` — wildcard cert for `*.shipzen.jeneeldumasia.codes` stored as `shipzen-tls-cert` in `shipzen-system` namespace
 - Add `terraform output route53_hosted_zone_id` so the ClusterIssuer can reference it
 
 ---
@@ -171,22 +171,22 @@ Also add the required SQS queue for interruption handling and the Karpenter IRSA
 **4 dashboards to build in `observability/dashboards/grafana-dashboards.yaml`:**
 
 **1. Platform Health (`platform-health.json`)**
-- Queue depth: `deployhub_queue_depth`
-- DLQ depth: `deployhub_dlq_depth`
-- Retry rate: `rate(deployhub_retry_total_total[5m])`
-- Reconciliation duration: `deployhub_reconciliation_duration_seconds`
-- Drift events: `rate(deployhub_drift_total_total[5m])`
+- Queue depth: `shipzen_queue_depth`
+- DLQ depth: `shipzen_dlq_depth`
+- Retry rate: `rate(shipzen_retry_total_total[5m])`
+- Reconciliation duration: `shipzen_reconciliation_duration_seconds`
+- Drift events: `rate(shipzen_drift_total_total[5m])`
 
 **2. Build Performance (`build-performance.json`)**
 - Build duration p50/p95 (requires OBS-3 to add the histogram)
 - Build success vs failure over time
-- Active builder pods: `kube_deployment_status_replicas_ready{deployment="deployhub-builder"}`
+- Active builder pods: `kube_deployment_status_replicas_ready{deployment="shipzen-builder"}`
 
 **3. Per-Project Resource Usage (`project-resources.json`)**
 - CPU usage per namespace: `sum(rate(container_cpu_usage_seconds_total[5m])) by (namespace)`
 - Memory per namespace: `sum(container_memory_working_set_bytes) by (namespace)`
 - Quota saturation: `kube_resourcequota{type="used"} / kube_resourcequota{type="hard"}`
-- All filtered by label `deployhub.io/tenant="true"`
+- All filtered by label `shipzen.io/tenant="true"`
 
 **4. Per-Deployment Pod Health (`pod-health.json`)**
 - Pod ready status: `kube_pod_status_ready`
@@ -198,7 +198,7 @@ Also add the required SQS queue for interruption handling and the Karpenter IRSA
 - Add `/observability` page to the UI with Grafana panels embedded as iframes
 - Use Grafana's `kiosk` mode + anonymous auth (internal network only)
 - Link "View Metrics" button from the deployment detail page to a pre-filtered per-deployment dashboard URL
-- Add `grafana.deployhub.jeneeldumasia.codes` HTTPRoute in `infra/system/`
+- Add `grafana.shipzen.jeneeldumasia.codes` HTTPRoute in `infra/system/`
 
 ---
 
@@ -207,12 +207,12 @@ Also add the required SQS queue for interruption handling and the Karpenter IRSA
 
 **Add to `worker/metrics.py`:**
 ```python
-deployhub_deployment_success_total = Counter(
-    'deployhub_deployment_success_total',
+shipzen_deployment_success_total = Counter(
+    'shipzen_deployment_success_total',
     'Total successful deployments reaching Running state'
 )
-deployhub_deployment_failure_total = Counter(
-    'deployhub_deployment_failure_total',
+shipzen_deployment_failure_total = Counter(
+    'shipzen_deployment_failure_total',
     'Total deployments that ended in Failed or DLQ state'
 )
 ```
@@ -220,8 +220,8 @@ Increment in `worker/main.py` when state transitions to `Running` (success) or `
 
 **Add to `builder/main.py`:**
 ```python
-deployhub_build_duration_seconds = Histogram(
-    'deployhub_build_duration_seconds',
+shipzen_build_duration_seconds = Histogram(
+    'shipzen_build_duration_seconds',
     'Build duration from clone to push',
     buckets=[30, 60, 120, 300, 600, 900]
 )
@@ -287,9 +287,9 @@ Re-enable the 3 removed rules in `observability/slos.yaml` after instrumenting.
 ### UI-3: Deployment Live URL
 After DNS-1 is fixed, the deployment detail page shows a prominent live banner when `state === "Running"`:
 ```
-● Live   https://a1b2c3d4.my-project.deployhub.jeneeldumasia.codes   [Open ↗] [Copy]
+● Live   https://a1b2c3d4.my-project.shipzen.jeneeldumasia.codes   [Open ↗] [Copy]
 ```
-- URL constructed as `{deployment_id.slice(0,8)}.{project_name}.deployhub.jeneeldumasia.codes`
+- URL constructed as `{deployment_id.slice(0,8)}.{project_name}.shipzen.jeneeldumasia.codes`
 - Read `NEXT_PUBLIC_APP_DOMAIN` env var so the domain is not hardcoded in UI code
 - Copy button uses `navigator.clipboard.writeText()`
 - Only shown when `state === "Running"` — hidden otherwise
@@ -331,7 +331,7 @@ Use `animate-pulse` on `bg-zinc-100 dark:bg-zinc-800` rounded placeholders.
 
 ### FEAT-2: Environment Variables UI
 Add an "Env Vars" tab to the project detail page:
-- `GET /projects/{id}/env` — returns list of secret key names (not values) from AWS Secrets Manager path `deployhub/{project_name}/`
+- `GET /projects/{id}/env` — returns list of secret key names (not values) from AWS Secrets Manager path `shipzen/{project_name}/`
 - `PUT /projects/{id}/env` — writes/updates a key/value pair
 - `DELETE /projects/{id}/env/{key}` — deletes a key
 - UI: key-value table with add/delete inline; values masked with "Reveal" toggle
@@ -354,10 +354,10 @@ Add an "Env Vars" tab to the project detail page:
 
 ---
 
-### FEAT-5: `deployhub.yaml` in Builder
+### FEAT-5: `shipzen.yaml` in Builder
 Repo root config file that builder reads before invoking `pack`:
 ```yaml
-# deployhub.yaml
+# shipzen.yaml
 port: 3000
 runtime: nodejs        # hints to pack builder selection
 health_check_path: /health
@@ -378,9 +378,9 @@ Add `slowapi` middleware to `api/main.py`:
 
 ---
 
-### OBS-5: Grafana Accessible from DeployHub UI
-- Add `grafana.deployhub.jeneeldumasia.codes` HTTPRoute in `infra/system/`
-- In `terraform/monitoring.tf`, set `grafana.grafana.ini."server".domain = "grafana.deployhub.jeneeldumasia.codes"` and `root_url`
+### OBS-5: Grafana Accessible from ShipZen UI
+- Add `grafana.shipzen.jeneeldumasia.codes` HTTPRoute in `infra/system/`
+- In `terraform/monitoring.tf`, set `grafana.grafana.ini."server".domain = "grafana.shipzen.jeneeldumasia.codes"` and `root_url`
 - Add `/observability` page in the UI:
   - Embeds Grafana's "Platform Health" dashboard via iframe (anonymous viewer access, internal only)
   - "View in Grafana" link opens the full dashboard in a new tab
@@ -410,7 +410,7 @@ Add `slowapi` middleware to `api/main.py`:
 ### OBS-4: Alertmanager Routing (Slack + PagerDuty)
 - `platform-alerts.yaml` rules exist but Alertmanager has no routing config
 - Add `alertmanager-config.yaml` ConfigMap to `infra/system/`:
-  - `severity: warning` → Slack `#deployhub-alerts`
+  - `severity: warning` → Slack `#shipzen-alerts`
   - `severity: critical` → PagerDuty + Slack
   - `severity: high` → Slack only, 5min repeat interval
 - Webhook URLs stored in AWS Secrets Manager, synced via ESO
@@ -424,9 +424,9 @@ Add `infra/api/networkpolicy.yaml`:
 ```yaml
 egress:
   - ports: [5432]  # PostgreSQL only
-    to: [deployhub-system postgres pods]
+    to: [shipzen-system postgres pods]
   - ports: [6379]  # Redis only
-    to: [deployhub-system redis pods]
+    to: [shipzen-system redis pods]
   - ports: [443]   # AWS APIs (S3, Secrets Manager, ECR) via NAT
     to: [0.0.0.0/0 except RFC1918]
 ```
@@ -471,9 +471,9 @@ Replace the 5s polling `AutoRefresh` on the deployment detail page with a WebSoc
 - [x] Schema bootstrap Job (ArgoCD PostSync hook, idempotent)
 - [x] Terraform: Redis, PostgreSQL, KEDA, ESO, ALB Controller, kube-prometheus-stack
 - [x] GitHub Actions IAM scoped to minimum permissions + main branch only
-- [x] `deployhub_drift_total` Gauge → Counter (rate() alerts now work)
+- [x] `shipzen_drift_total` Gauge → Counter (rate() alerts now work)
 - [x] SLO recording rules cleaned up (removed 3 rules for non-existent metrics)
-- [x] `deployhub-db-credentials`, `deployhub-s3-config`, `deployhub-ecr-config` K8s Secrets via Terraform
+- [x] `shipzen-db-credentials`, `shipzen-s3-config`, `shipzen-ecr-config` K8s Secrets via Terraform
 - [x] Controller: ECR_REGISTRY env var wired into tenant namespace template
 - [x] UI: dark sidebar layout, custom Tailwind design tokens
 - [x] UI: StatusBadge with animated pulsing dots per state

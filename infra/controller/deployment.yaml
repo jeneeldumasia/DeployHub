@@ -1,21 +1,21 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: deployhub-controller
-  namespace: deployhub-system
+  name: shipzen-controller
+  namespace: shipzen-system
   labels:
-    app: deployhub-controller
+    app: shipzen-controller
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: deployhub-controller
+      app: shipzen-controller
   template:
     metadata:
       labels:
-        app: deployhub-controller
+        app: shipzen-controller
     spec:
-      serviceAccountName: deployhub-controller-sa
+      serviceAccountName: shipzen-controller-sa
       securityContext:
         runAsNonRoot: true
         runAsUser: 1000
@@ -23,7 +23,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: controller
-          image: deployhub-controller:latest
+          image: shipzen-controller:latest
           imagePullPolicy: Always
           securityContext:
             allowPrivilegeEscalation: false
@@ -37,14 +37,14 @@ spec:
             - name: DATABASE_URL
               valueFrom:
                 secretKeyRef:
-                  name: deployhub-db-credentials
+                  name: shipzen-db-credentials
                   key: url
             - name: RECONCILIATION_INTERVAL
               value: "60"
             - name: ECR_REGISTRY
               valueFrom:
                 secretKeyRef:
-                  name: deployhub-ecr-config
+                  name: shipzen-ecr-config
                   key: registry_hostname
           resources:
             requests:

@@ -26,22 +26,22 @@ resource "null_resource" "argocd_apps" {
   }
   provisioner "local-exec" {
     command = <<EOT
-      aws eks update-kubeconfig --region ${var.aws_region} --name deployhub-cluster
+      aws eks update-kubeconfig --region ${var.aws_region} --name shipzen-cluster
       cat <<EOF | kubectl apply -f -
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: deployhub-platform
+  name: shipzen-platform
   namespace: argocd
 spec:
   project: default
   source:
-    repoURL: "https://github.com/jeneeldumasia/DeployHub.git"
+    repoURL: "https://github.com/jeneeldumasia/ShipZen.git"
     targetRevision: HEAD
     path: infra
   destination:
     server: https://kubernetes.default.svc
-    namespace: deployhub-system
+    namespace: shipzen-system
   syncPolicy:
     automated:
       prune: true
@@ -51,8 +51,8 @@ spec:
   ignoreDifferences:
     - group: apps
       kind: Deployment
-      name: deployhub-builder
-      namespace: deployhub-build
+      name: shipzen-builder
+      namespace: shipzen-build
       jsonPointers:
         - /spec/replicas
 EOF

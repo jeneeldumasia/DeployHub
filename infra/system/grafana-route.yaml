@@ -5,10 +5,10 @@ metadata:
   namespace: observability
 spec:
   parentRefs:
-    - name: deployhub-gateway
-      namespace: deployhub-system
+    - name: shipzen-gateway
+      namespace: shipzen-system
   hostnames:
-    - "grafana.deployhub.jeneeldumasia.codes"
+    - "grafana.shipzen.jeneeldumasia.codes"
   rules:
     - backendRefs:
         - name: kube-prometheus-stack-grafana

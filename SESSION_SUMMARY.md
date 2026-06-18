@@ -1,4 +1,4 @@
-# DeployHub — Session Summary & Checkpoint
+# ShipZen — Session Summary & Checkpoint
 
 > **ATTENTION FOR NEXT SESSION:** Read this entire document before writing any code or making architectural changes.
 
@@ -6,13 +6,13 @@
 
 ## Project Context
 - **Owner:** Jeneel (student)
-- **Domain:** `jeneeldumasia.codes` — platform served at `deployhub.jeneeldumasia.codes`
-- **DNS pattern:** `{dep-id}.{project}.deployhub.jeneeldumasia.codes` per deployment
+- **Domain:** `jeneeldumasia.codes` — platform served at `shipzen.jeneeldumasia.codes`
+- **DNS pattern:** `{dep-id}.{project}.shipzen.jeneeldumasia.codes` per deployment
 - **AWS Credits:** ~$134 remaining. Infra torn down after every session.
 - **Node type:** `m7i-flex.large` (EKS 1.36, AL2023). t3.medium caused lag.
 - **Cost:** ~$0.40–0.50/hr base when cluster is live.
-- **Repo:** `github.com/jeneeldumasia/DeployHub`
-- **State backend:** HCP Terraform (`jeneel-deployhub` org, `deployhub-prod` workspace)
+- **Repo:** `github.com/jeneeldumasia/ShipZen`
+- **State backend:** HCP Terraform (`jeneel-shipzen` org, `shipzen-prod` workspace)
 
 ---
 
@@ -28,8 +28,8 @@
 ### Infrastructure
 - **Terraform** provisions: VPC, EKS 1.36, EBS CSI addon (IRSA), ECR, S3 (build logs, encrypted), Karpenter, KEDA, ESO, cert-manager, ALB Controller, kube-prometheus-stack, ArgoCD, Redis (Bitnami), PostgreSQL (Bitnami).
 - **ArgoCD** syncs `infra/` — controller, worker, API, builder, scale, secrets, schema Job.
-- **Karpenter** — builder NodePool (tainted `deployhub.io/dedicated=builder`) + tenant NodePool (tainted `deployhub.io/dedicated=tenant`). Nodes are isolated.
-- **Gateway** — Envoy Gateway, wildcard TLS on `*.deployhub.jeneeldumasia.codes`, HTTP→HTTPS redirect.
+- **Karpenter** — builder NodePool (tainted `shipzen.io/dedicated=builder`) + tenant NodePool (tainted `shipzen.io/dedicated=tenant`). Nodes are isolated.
+- **Gateway** — Envoy Gateway, wildcard TLS on `*.shipzen.jeneeldumasia.codes`, HTTP→HTTPS redirect.
 - **Observability** — PrometheusRules, Grafana ConfigMap dashboards, ServiceMonitors for all platform services.
 - **CI/CD** — `deploy.yaml` (plan + apply), `destroy.yaml` (safe teardown), `auto-destroy.yaml` (4h deadman switch).
 
@@ -52,8 +52,8 @@
 
 **Issues Fixed This Session:**
 - **NLB 10-minute Timeout:** Caused by multiple chained race conditions and API changes.
-- **ArgoCD App Race Conditions:** `deployhub-platform` ArgoCD app was syncing before operators (AWS ALB Controller, Envoy, Cert Manager) were ready. Added strict `depends_on` chains in `argocd.tf`.
-- **Envoy Gateway CRD Version Mismatch:** `EnvoyProxy` apiVersion was using `config.gateway.envoyproxy.io/v1alpha1` instead of `gateway.envoyproxy.io/v1alpha1`, causing the `deployhub-platform` ArgoCD app to fail its sync, which meant the `Gateway` resource was never deployed and the AWS NLB was never requested.
+- **ArgoCD App Race Conditions:** `shipzen-platform` ArgoCD app was syncing before operators (AWS ALB Controller, Envoy, Cert Manager) were ready. Added strict `depends_on` chains in `argocd.tf`.
+- **Envoy Gateway CRD Version Mismatch:** `EnvoyProxy` apiVersion was using `config.gateway.envoyproxy.io/v1alpha1` instead of `gateway.envoyproxy.io/v1alpha1`, causing the `shipzen-platform` ArgoCD app to fail its sync, which meant the `Gateway` resource was never deployed and the AWS NLB was never requested.
 - **Webhook Race Conditions:** `aws-load-balancer-controller` webhook wasn't ready before `kube-prometheus-stack` tried to deploy, causing `no endpoints available for service` errors. Added `time_sleep.wait_for_alb_webhook` dependencies.
 - **Kyverno Pod Security Standard Blocks:** Kyverno's strict cluster policies blocked the `prometheus-node-exporter` DaemonSet (`disallow-host-namespaces`, `disallow-host-path`). Disabled `nodeExporter` in the Helm chart to allow deployment to proceed safely in a managed EKS environment.
 - **DNS Resolution Errors:** `kubectl` hung locally due to stale EKS cluster endpoints. Resolved by running `aws eks update-kubeconfig`.
@@ -71,7 +71,7 @@
 |----|----------|-------|
 | OBS-1 | P1 | Per-pod monitoring not wired up (PodMonitor per tenant namespace) |
 | OBS-2 | P1 | Grafana dashboards reference non-existent metrics — need rewriting |
-| OBS-3 | P1 | Missing `deployhub_deployment_success_total`, `_failure_total`, `build_duration_seconds` metrics |
+| OBS-3 | P1 | Missing `shipzen_deployment_success_total`, `_failure_total`, `build_duration_seconds` metrics |
 | FEAT-3 | P2 | GitHub Webhook → auto-deploy not implemented |
 | SEC-1 | P2 | Re-enable `node-exporter` by creating a fine-grained Kyverno `PolicyException`. |
 
