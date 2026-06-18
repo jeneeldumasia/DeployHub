@@ -39,6 +39,32 @@ spec:
               value: "shipzen.jeneeldumasia.codes"
             - name: AUTH_TRUST_HOST
               value: "true"
+            - name: AUTH_SECRET
+              value: "5f8a0b1c2d3e4f5g6h7i8j9k0l1m2n3o4p5q6r7s8t9u0v1w2x3y4z5"
+            - name: AUTH0_CLIENT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: shipzen-auth0
+                  key: client_id
+                  optional: true
+            - name: AUTH0_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: shipzen-auth0
+                  key: client_secret
+                  optional: true
+            - name: AUTH0_ISSUER
+              valueFrom:
+                secretKeyRef:
+                  name: shipzen-auth0
+                  key: issuer
+                  optional: true
+            - name: AUTH0_AUDIENCE
+              valueFrom:
+                secretKeyRef:
+                  name: shipzen-auth0
+                  key: audience
+                  optional: true
           resources:
             requests:
               cpu: "100m"

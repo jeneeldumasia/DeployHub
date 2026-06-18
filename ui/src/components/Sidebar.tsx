@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Rocket, LayoutDashboard, FolderGit2, Zap, Activity } from "lucide-react";
+import { signOut } from "next-auth/react";
+import { Rocket, LayoutDashboard, FolderGit2, Zap, Activity, LogOut } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { ThemeToggle } from "./ThemeToggle";
 
@@ -61,6 +62,9 @@ export function Sidebar({ user }: { user?: any }) {
               <p className="text-sidebar-heading text-xs font-medium truncate">{user.name || "User"}</p>
               <p className="text-sidebar-text text-[11px] truncate">{user.email}</p>
             </div>
+            <button onClick={() => signOut({ callbackUrl: "/login" })} className="text-sidebar-text hover:text-red-400 transition-colors">
+              <LogOut size={16} />
+            </button>
             <ThemeToggle />
           </div>
         ) : (
