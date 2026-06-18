@@ -140,13 +140,20 @@ module "ebs_csi_irsa_role" {
 
 # Kubernetes provider — authenticated via EKS token
 provider "kubernetes" {
-  host                   = module.eks.cluster_endpoint
+  host                   = join("", [module.eks.cluster_endpoint, time_sleep.wait_for_cluster_auth.id == "" ? "" : ""])
   cluster_ca_certificate = base64decode(module.eks.cluster_certificate_authority_data)
   exec {
     api_version = "client.authentication.k8s.io/v1beta1"
     command     = "aws"
-    args        = ["eks", "get-token", "--cluster-name", module.eks.cluster_name]
+    args        = ["eks", "get-token", "--cluster-name", module.eks.cluster_name, "--region", var.aws_region]
   }
+}
+
+# Wait for the EKS access entry to propagate to the control plane
+# before attempting to create Kubernetes resources via the provider.
+resource "time_sleep" "wait_for_cluster_auth" {
+  depends_on      = [module.eks]
+  create_duration = "60s"
 }
 
 
@@ -197,6 +204,7 @@ resource "aws_iam_role_policy" "builder_ecr" {
 }
 
 resource "kubernetes_namespace" "shipzen_build" {
+  depends_on = [time_sleep.wait_for_cluster_auth]
   metadata {
     name = "shipzen-build"
     labels = {
