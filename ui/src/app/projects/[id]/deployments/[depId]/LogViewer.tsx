@@ -20,7 +20,7 @@ export function LogViewer({ projectId, deploymentId, buildId }: { projectId: str
           if (data.url) {
             return fetch(data.url);
           }
-          throw new Error(data.message || "No URL returned");
+          throw new Error("No URL returned");
         })
         .then(res => res.text())
         .then(text => {
