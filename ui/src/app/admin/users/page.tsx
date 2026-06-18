@@ -14,9 +14,9 @@ async function getUsers(token: string) {
 
 export default async function AdminUsersPage() {
   const session = await auth();
-  if (!session?.accessToken) redirect("/login");
+  if (!(session as any)?.accessToken) redirect("/login");
 
-  const users = await getUsers(session.accessToken as string);
+  const users = await getUsers((session as any).accessToken as string);
 
   async function promoteUser(formData: FormData) {
     "use server";

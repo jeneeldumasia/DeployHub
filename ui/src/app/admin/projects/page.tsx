@@ -14,7 +14,7 @@ async function getGlobalProjects(token: string) {
 
 export default async function AdminProjectsPage() {
   const session = await auth();
-  if (!session?.accessToken) redirect("/login");
+  if (!(session as any)?.accessToken) redirect("/login");
 
   const projects = await getGlobalProjects((session as any).accessToken);
 

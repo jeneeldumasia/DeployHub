@@ -13,7 +13,7 @@ async function getAuditLogs(token: string) {
 
 export default async function AdminAuditPage() {
   const session = await auth();
-  if (!session?.accessToken) redirect("/login");
+  if (!(session as any)?.accessToken) redirect("/login");
 
   const logs = await getAuditLogs((session as any).accessToken);
 
