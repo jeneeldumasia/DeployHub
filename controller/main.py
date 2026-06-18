@@ -8,6 +8,7 @@ from jinja2 import Environment, FileSystemLoader
 from kubernetes import client, config as k8s_config
 from kubernetes.client.rest import ApiException
 from kubernetes.utils import create_from_yaml
+import boto3
 from models import ProjectStatus, ProjectSchema
 from metrics import (
     shipzen_drift_total, 
@@ -43,6 +44,24 @@ RECONCILIATION_INTERVAL = int(os.getenv("RECONCILIATION_INTERVAL", "15"))
 ECR_REGISTRY = os.getenv("ECR_REGISTRY", "")
 
 jinja_env = Environment(loader=FileSystemLoader("templates"))
+
+
+def ensure_ecr_repository(project_id: str):
+    try:
+        ecr = boto3.client('ecr', region_name=os.getenv("AWS_REGION", "us-east-1"))
+        repo_name = f"shipzen-builds/{project_id}"
+        try:
+            ecr.describe_repositories(repositoryNames=[repo_name])
+        except ecr.exceptions.RepositoryNotFoundException:
+            logger.info(f"Creating ECR repository {repo_name}")
+            ecr.create_repository(
+                repositoryName=repo_name,
+                imageScanningConfiguration={'scanOnPush': True},
+                imageTagMutability='IMMUTABLE'
+            )
+    except Exception as e:
+        logger.error(f"Failed to ensure ECR repository exists: {e}")
+        raise
 
 
 def get_db_connection():
@@ -191,6 +210,7 @@ def reconcile():
                             # was actually created. This breaks the race where the DB
                             # is marked READY before K8s has processed the request.
                             if check_namespace_exists(project.namespace):
+                                ensure_ecr_repository(project.id)
                                 project_cur.execute(
                                     "UPDATE projects SET status = %s WHERE id = %s;",
                                     (ProjectStatus.READY.value, project.id)
@@ -230,8 +250,15 @@ def reconcile():
                     logger.error(f"Error reconciling project {row['id']}: {e}")
                     try:
                         conn.rollback()
-                    except Exception:
-                        pass
+                        with get_db_connection() as err_conn:
+                            with err_conn.cursor() as err_cur:
+                                err_cur.execute(
+                                    "UPDATE projects SET status = %s WHERE id = %s;",
+                                    (ProjectStatus.FAILED.value, row['id'])
+                                )
+                            err_conn.commit()
+                    except Exception as rb_err:
+                        logger.error(f"Failed to set FAILED state: {rb_err}")
 
     finally:
         conn.close()

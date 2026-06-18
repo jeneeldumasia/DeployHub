@@ -17,7 +17,8 @@ import psycopg2
 from psycopg2.extras import DictCursor
 from fastapi import FastAPI, HTTPException, Query, Depends, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
+import json
 from pydantic import BaseModel, field_validator
 import boto3
 import hmac
@@ -259,6 +260,34 @@ def delete_project(request: Request, project_id: str, current_user: User = Depen
     )
     return {"message": f"Project {project_id} marked for termination"}
 
+class AnalyzeRequest(BaseModel):
+    repo_url: str
+    branch: str = "main"
+
+@app.post("/projects/analyze", tags=["Projects"])
+@limiter.limit("5/minute")
+def analyze_repo(request: Request, body: AnalyzeRequest, current_user: User = Depends(get_current_user)):
+    """Analyze a Git repository and detect deployable services."""
+    import tempfile
+    import subprocess
+    from analyzer import RepoAnalyzer
+    
+    with tempfile.TemporaryDirectory() as tmpdir:
+        try:
+            # Shallow clone
+            subprocess.run(
+                ["git", "clone", "--depth", "1", "-b", body.branch, body.repo_url, tmpdir],
+                check=True, capture_output=True, timeout=30
+            )
+        except Exception as e:
+            logger.error(f"Failed to clone repo for analysis: {e}")
+            raise HTTPException(status_code=400, detail="Failed to clone repository")
+            
+        analyzer = RepoAnalyzer(repo_path=tmpdir, repo_name=body.repo_url.split('/')[-1].replace('.git', ''))
+        services = analyzer.analyze()
+        
+    return {"services": [s.__dict__ for s in services]}
+
 # ── Deployments ───────────────────────────────────────────────────────────────
 
 @app.post("/projects/{project_id}/deployments", status_code=202, tags=["Deployments"])
@@ -351,6 +380,56 @@ def create_deployment(request: Request, project_id: str, body: CreateDeploymentR
     return _serialize(deployment)
 
 
+@app.post("/projects/{project_id}/rollback", status_code=202, tags=["Deployments"])
+@limiter.limit("5/minute")
+def rollback_deployment(request: Request, project_id: str, current_user: User = Depends(get_current_user)):
+    """Re-deploy the last known-good image without rebuilding."""
+    project = _get_project_or_404(project_id, current_user)
+    
+    with get_connection() as conn:
+        with conn.cursor(cursor_factory=DictCursor) as cur:
+            # Find the last successful deployment
+            cur.execute("""
+                SELECT * FROM deployments 
+                WHERE project_id = %s AND state = 'Running'
+                ORDER BY updated_at DESC LIMIT 1;
+            """, (project_id,))
+            last_good = cur.fetchone()
+            
+            if not last_good:
+                raise HTTPException(status_code=409, detail="No previous successful deployment found to rollback to.")
+                
+            deployment_id = str(uuid.uuid4())
+            cur.execute("""
+                INSERT INTO deployments
+                    (deployment_id, project_id, repo_url, image_uri, replicas, port, state)
+                VALUES (%s, %s, %s, %s, %s, %s, 'Deploying')
+                RETURNING *;
+            """, (
+                deployment_id, project_id, last_good['repo_url'], 
+                last_good['image_uri'], last_good['replicas'], last_good['port']
+            ))
+            new_dep = dict(cur.fetchone())
+        conn.commit()
+        
+    # Publish state update to Redis
+    try:
+        r = get_redis()
+        r.publish(f"shipzen:status:{deployment_id}", json.dumps({"state": "Deploying", "last_error": None}))
+    except Exception as e:
+        logger.warning(f"Failed to publish status to Redis: {e}")
+        
+    log_audit_event(
+        project_id=project_id,
+        user_id=current_user.user_id,
+        action="ROLLBACK",
+        resource_type="deployment",
+        resource_id=deployment_id,
+        details={"from_image": last_good['image_uri']},
+    )
+    return {"message": "Rollback queued", "deployment_id": deployment_id, "status": "Deploying"}
+
+
 @app.get("/projects/{project_id}/deployments", tags=["Deployments"])
 @limiter.limit("100/minute")
 def list_deployments(
@@ -374,6 +453,9 @@ def list_deployments(
     params = [project_id]
 
     if cursor:
+from fastapi.responses import StreamingResponse
+import json
+{{ ... }}
         try:
             cursor_updated_at, cursor_deployment_id = cursor.split("|", 1)
             query += " AND (updated_at, deployment_id) < (%s, %s)"
@@ -416,7 +498,13 @@ async def websocket_deployment_status(websocket: WebSocket, project_id: str, dep
     
     await websocket.accept()
     
-    def fetch_status():
+    import redis.asyncio as aioredis
+    import asyncio
+    r = aioredis.Redis(host=REDIS_HOST, port=REDIS_PORT, decode_responses=True)
+    pubsub = r.pubsub()
+    await pubsub.subscribe(f"shipzen:status:{deployment_id}")
+
+    def fetch_initial():
         with get_connection() as conn:
             with conn.cursor(cursor_factory=DictCursor) as cur:
                 cur.execute(
@@ -426,31 +514,48 @@ async def websocket_deployment_status(websocket: WebSocket, project_id: str, dep
                 return cur.fetchone()
 
     try:
-        last_state = None
-        while True:
-            import asyncio
-            try:
-                row = await asyncio.to_thread(fetch_status)
-                
-                if row:
-                    current_state = row['state']
-                    if current_state != last_state:
-                        await websocket.send_json({"state": current_state, "last_error": row['last_error']})
-                        last_state = current_state
-                        
-                    if current_state in ("Running", "Failed", "DLQ"):
-                        await asyncio.sleep(5) # Slow down polling when in terminal state
-                    else:
-                        await asyncio.sleep(1)
-                else:
-                    await websocket.send_json({"error": "Not found"})
-                    await asyncio.sleep(5)
-            except Exception as e:
-                logger.error(f"WS error: {e}")
-                await asyncio.sleep(2)
-                
+        row = await asyncio.to_thread(fetch_initial)
+        if row:
+            await websocket.send_json({"state": row['state'], "last_error": row['last_error']})
+            
+        async for message in pubsub.listen():
+            if message["type"] == "message":
+                data = json.loads(message["data"])
+                await websocket.send_json(data)
+                if data.get("state") in ("Running", "Failed", "DLQ"):
+                    break
     except WebSocketDisconnect:
         logger.info(f"WebSocket disconnected for {deployment_id}")
+    except Exception as e:
+        logger.error(f"WS error: {e}")
+    finally:
+        await pubsub.unsubscribe()
+        await r.aclose()
+
+
+@app.get("/projects/{project_id}/deployments/{deployment_id}/logs/stream", tags=["Deployments"])
+async def stream_logs(project_id: str, deployment_id: str, current_user: User = Depends(get_current_user)):
+    _get_project_or_404(project_id, current_user)
+    
+    import redis.asyncio as aioredis
+    r = aioredis.Redis(host=REDIS_HOST, port=REDIS_PORT, decode_responses=True)
+    
+    async def event_stream():
+        pubsub = r.pubsub()
+        await pubsub.subscribe(f"shipzen:logs:{deployment_id}")
+        try:
+            async for message in pubsub.listen():
+                if message["type"] == "message":
+                    yield f"data: {message['data']}\n\n"
+        finally:
+            await pubsub.unsubscribe()
+            await r.aclose()
+
+    return StreamingResponse(
+        event_stream(), 
+        media_type="text/event-stream", 
+        headers={"Cache-Control": "no-cache", "Connection": "keep-alive"}
+    )
 
 # ── Builds ────────────────────────────────────────────────────────────────────
 

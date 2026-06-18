@@ -1,0 +1,37 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: ecr-token-rotator
+  namespace: shipzen-system
+spec:
+  schedule: "0 */6 * * *"
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 1
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          serviceAccountName: ecr-token-rotator-sa
+          containers:
+          - name: rotator
+            image: amazon/aws-cli:latest
+            command:
+            - /bin/sh
+            - -c
+            - |
+              echo "Fetching new ECR token..."
+              TOKEN=$(aws ecr get-login-password --region ${AWS_REGION})
+              if [ -z "$TOKEN" ]; then
+                echo "Failed to get ECR token"
+                exit 1
+              fi
+              echo "Updating Secret in AWS Secrets Manager..."
+              aws secretsmanager put-secret-value \
+                --secret-id "shipzen/ecr-pull-token" \
+                --secret-string "$TOKEN" \
+                --region ${AWS_REGION}
+              echo "Success!"
+            env:
+            - name: AWS_REGION
+              value: "us-east-1"
+          restartPolicy: OnFailure

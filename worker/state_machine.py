@@ -1,3 +1,5 @@
+import json
+import redis
 import logging
 import psycopg2
 from psycopg2.extras import DictCursor
@@ -23,12 +25,12 @@ class StateMachine:
         # on any broken-pipe / interface-error rather than using one persistent
         # connection for the entire process lifetime.
         self._conn = None
-        # Fix #3: removed _ensure_table(). The canonical schema (api/schema.sql)
-        # owns the deployments table definition. The worker creating its own
-        # truncated 4-column version caused a schema conflict where the
-        # controller's queries for project_id, image_uri, replicas, port would
-        # fail with UndefinedColumn. Schema bootstrapping happens at cluster
-        # init, not inside the worker.
+        self._redis = None
+
+    def _get_redis(self):
+        if self._redis is None:
+            self._redis = redis.Redis(host=config.REDIS_HOST, port=config.REDIS_PORT)
+        return self._redis
 
     def _get_conn(self):
         """
@@ -72,6 +74,14 @@ class StateMachine:
                     """, (new_state, datetime.now(timezone.utc), error_msg, deployment_id))
                     if cur.rowcount == 0:
                         logger.warning(f"Deployment {deployment_id} not found in DB when transitioning to {new_state}")
+                
+                # Publish state update to Redis
+                try:
+                    payload = json.dumps({"state": new_state, "last_error": error_msg})
+                    self._get_redis().publish(f"shipzen:status:{deployment_id}", payload)
+                except Exception as e:
+                    logger.warning(f"Failed to publish status to Redis: {e}")
+
                 # Fix #24: was print(), now uses structured logger
                 logger.info(f"Deployment {deployment_id} transition -> {new_state}")
                 break

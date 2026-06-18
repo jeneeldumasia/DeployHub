@@ -10,6 +10,8 @@ import redis
 import psycopg2
 import boto3
 import yaml
+import json
+import base64
 from prometheus_client import Histogram, start_http_server
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -69,14 +71,29 @@ def update_db_state(deployment_id: str, state: str, error_msg: str = None):
     try:
         conn = get_db_conn()
         with conn.cursor() as cur:
-            cur.execute("""
-                UPDATE deployments
-                SET state = %s, last_error = %s, updated_at = NOW()
-                WHERE deployment_id = %s;
-            """, (state, error_msg, deployment_id))
+            if error_msg:
+                cur.execute(
+                    "UPDATE deployments SET state = %s, last_error = %s, updated_at = NOW() WHERE deployment_id = %s;",
+                    (state, error_msg, deployment_id)
+                )
+            else:
+                cur.execute(
+                    "UPDATE deployments SET state = %s, updated_at = NOW() WHERE deployment_id = %s;",
+                    (state, deployment_id)
+                )
+        conn.commit()
         conn.close()
+        
+        # Publish state update to Redis for real-time WebSocket listeners
+        try:
+            r = redis.Redis(host=REDIS_HOST, port=REDIS_PORT)
+            payload = json.dumps({"state": state, "last_error": error_msg})
+            r.publish(f"shipzen:status:{deployment_id}", payload)
+        except Exception as e:
+            logger.warning(f"Failed to publish status to Redis: {e}")
+            
     except Exception as e:
-        logger.error(f"Failed to update PostgreSQL state for {deployment_id}: {e}")
+        logger.error(f"Failed to update deployment state {state} for {deployment_id}: {e}")
 
 
 def record_build(deployment_id: str, s3_key: str, status: str):
@@ -164,23 +181,7 @@ def run_build(deployment_id: str, repo_url: str, branch: str, image_name: str):
         # Dockerfile-based and non-Dockerfile repos natively via its detection
         # logic — no need to check for a Dockerfile ourselves.
         # Ensure ECR repository exists
-        if "amazonaws.com" in image_name:
-            try:
-                ecr = boto3.client('ecr')
-                registry_and_repo, _ = image_name.rsplit(':', 1)
-                repo_name = registry_and_repo.split('/', 1)[1]
-                
-                try:
-                    ecr.describe_repositories(repositoryNames=[repo_name])
-                except ecr.exceptions.RepositoryNotFoundException:
-                    logger.info(f"Creating ECR repository {repo_name}")
-                    ecr.create_repository(
-                        repositoryName=repo_name,
-                        imageScanningConfiguration={'scanOnPush': True},
-                        imageTagMutability='IMMUTABLE'
-                    )
-            except Exception as e:
-                logger.error(f"Failed to ensure ECR repository exists: {e}")
+        # ECR repo creation is now handled by the Controller during project provisioning
 
         logger.info("Using Cloud Native Buildpacks (pack --publish).")
         cmd = [
@@ -192,24 +193,29 @@ def run_build(deployment_id: str, repo_url: str, branch: str, image_name: str):
 
         logger.info(f"Executing: {' '.join(cmd)}")
 
-        # Fix #5: The old code piped process.stdout directly into upload_fileobj.
-        # upload_fileobj reads until EOF, which only arrives after the process
-        # exits — but it held the pipe open and left no way to kill the process
-        # on upload failure. The fix:
-        #   1. Collect all stdout/stderr via communicate() with a timeout.
-        #   2. Upload the collected bytes to S3.
-        #   3. Check returncode AFTER communicate() returns.
-        # This ensures the process is always reaped and the log is always uploaded.
+        # Fix #5: Avoid pipe deadlocks by reading line by line.
+        # This also allows us to stream logs in real-time via Redis Pub/Sub (SSE Feature)
         BUILD_TIMEOUT_SECONDS = int(os.getenv("BUILD_TIMEOUT_SECONDS", "600"))  # 10 min default
         process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
         build_start = time.time()
 
+        stdout_chunks = []
+        r = redis.Redis(host=REDIS_HOST, port=REDIS_PORT)
         try:
-            stdout_bytes, _ = process.communicate(timeout=BUILD_TIMEOUT_SECONDS)
+            for line in iter(process.stdout.readline, b''):
+                stdout_chunks.append(line)
+                try:
+                    r.publish(f"shipzen:logs:{deployment_id}", line.decode('utf-8', errors='replace'))
+                except Exception:
+                    pass
+            process.stdout.close()
+            process.wait(timeout=max(1, BUILD_TIMEOUT_SECONDS - (time.time() - build_start)))
+            stdout_bytes = b''.join(stdout_chunks)
             shipzen_build_duration_seconds.observe(time.time() - build_start)
         except subprocess.TimeoutExpired:
             process.kill()
-            stdout_bytes, _ = process.communicate()
+            process.wait()
+            stdout_bytes = b''.join(stdout_chunks)
             shipzen_build_duration_seconds.observe(time.time() - build_start)
             logger.error(f"Build {deployment_id} timed out after {BUILD_TIMEOUT_SECONDS}s.")
             record_build(deployment_id, s3_log_key, "Failed")
@@ -225,6 +231,31 @@ def run_build(deployment_id: str, repo_url: str, branch: str, image_name: str):
 
         if process.returncode == 0:
             logger.info(f"Build {deployment_id} successful. Checking ECR image scan results...")
+            
+            # Dynamic Port Detection using crane
+            try:
+                ecr = boto3.client('ecr')
+                auth_data = ecr.get_authorization_token()['authorizationData'][0]
+                token = base64.b64decode(auth_data['authorizationToken']).decode('utf-8')
+                username, password = token.split(':')
+                registry_url = auth_data['proxyEndpoint'].replace('https://', '')
+                subprocess.run(["crane", "auth", "login", registry_url, "-u", username, "-p", password], check=True, capture_output=True)
+                
+                crane_out = subprocess.check_output(["crane", "config", image_name], text=True)
+                config_json = json.loads(crane_out)
+                exposed_ports = config_json.get("config", {}).get("ExposedPorts", {})
+                
+                if exposed_ports:
+                    # '8080/tcp' -> '8080'
+                    first_port = list(exposed_ports.keys())[0].split('/')[0]
+                    conn = get_db_conn()
+                    with conn.cursor() as cur:
+                        cur.execute("UPDATE deployments SET port = %s WHERE deployment_id = %s;", (int(first_port), deployment_id))
+                    conn.commit()
+                    conn.close()
+                    logger.info(f"Dynamically discovered and assigned port {first_port} from image {image_name}")
+            except Exception as e:
+                logger.warning(f"Failed to extract exposed port using crane: {e}")
             
             # ECR Image Scanning Gate
             try:

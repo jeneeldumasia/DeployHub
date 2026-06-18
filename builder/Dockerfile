@@ -15,6 +15,10 @@ ARG PACK_VERSION=v0.33.2
 RUN curl -sSL "https://github.com/buildpacks/pack/releases/download/${PACK_VERSION}/pack-${PACK_VERSION}-linux.tgz" \
     | tar -C /usr/local/bin/ --no-same-owner -xzv pack
 
+ARG CRANE_VERSION=v0.19.1
+RUN curl -sSL "https://github.com/google/go-containerregistry/releases/download/${CRANE_VERSION}/go-containerregistry_Linux_x86_64.tar.gz" \
+    | tar -C /usr/local/bin/ --no-same-owner -xzv crane
+
 WORKDIR /app
 COPY requirements.txt .
 RUN pip3 install --no-cache-dir -r requirements.txt
