@@ -1,10 +1,3 @@
-"""
-Auth0 JWT authentication for the ShipZen API.
-
-Validates Bearer tokens from the Authorization header against Auth0's JWKS endpoint.
-Falls back to a permissive stub when AUTH0_DOMAIN is not set (local dev / CI).
-"""
-
 import os
 import logging
 from dataclasses import dataclass
@@ -13,63 +6,34 @@ from typing import Optional
 import httpx
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from jose import jwt, JWTError
+from cachetools import TTLCache
 
 logger = logging.getLogger(__name__)
 
-AUTH0_DOMAIN   = os.getenv("AUTH0_DOMAIN", "")
-AUTH0_AUDIENCE = os.getenv("AUTH0_AUDIENCE", "")
-ALGORITHM      = "RS256"
+GITHUB_ENABLED = os.getenv("GITHUB_ENABLED", "false").lower() == "true"
 
-# FastAPI security scheme — extracts Bearer token from Authorization header
 _bearer = HTTPBearer(auto_error=False)
 
-# Simple in-memory JWKS cache so we don't hit Auth0 on every request
-_jwks_cache: Optional[dict] = None
-
-
-def _get_jwks() -> dict:
-    global _jwks_cache
-    if _jwks_cache is not None:
-        return _jwks_cache
-    url = f"https://{AUTH0_DOMAIN}/.well-known/jwks.json"
-    try:
-        resp = httpx.get(url, timeout=5)
-        resp.raise_for_status()
-        _jwks_cache = resp.json()
-        return _jwks_cache
-    except Exception as e:
-        logger.error(f"Failed to fetch JWKS from {url}: {e}")
-        raise HTTPException(status_code=503, detail="Auth service unavailable")
-
+# Cache GitHub tokens for 5 minutes to avoid rate limits
+_token_cache = TTLCache(maxsize=1000, ttl=300)
 
 @dataclass
 class User:
     user_id: str
     is_admin: bool = False
 
-
 def get_current_user_from_token(token: str) -> User:
-    """Helper to validate a token string directly (useful for WebSockets)."""
     return get_current_user(HTTPAuthorizationCredentials(scheme="Bearer", credentials=token))
 
 def get_current_user(
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(_bearer),
 ) -> User:
-    """
-    FastAPI dependency — validates the JWT and returns the current user.
-
-    If AUTH0_DOMAIN is not configured (local dev), returns a stub admin user
-    so the API works without Auth0 set up.
-    """
-    # ── Local dev stub ────────────────────────────────────────────────────────
-    if not AUTH0_DOMAIN:
-        logger.warning("AUTH0_DOMAIN not set — using stub user for local dev")
+    if not GITHUB_ENABLED:
+        logger.warning("GITHUB_ENABLED not true — using stub user for local dev")
         from database import get_or_create_user
         db_user = get_or_create_user("local-dev-user", "admin@shipzen.local")
         return User(user_id=db_user["id"], is_admin=(db_user["role"] == "admin"))
 
-    # ── Require Bearer token ──────────────────────────────────────────────────
     if credentials is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -79,54 +43,47 @@ def get_current_user(
 
     token = credentials.credentials
 
-    # ── Decode and validate ───────────────────────────────────────────────────
-    try:
-        jwks = _get_jwks()
-        unverified_header = jwt.get_unverified_header(token)
-
-        # Find the matching key in JWKS
-        rsa_key = {}
-        for key in jwks.get("keys", []):
-            if key.get("kid") == unverified_header.get("kid"):
-                rsa_key = {
-                    "kty": key["kty"],
-                    "kid": key["kid"],
-                    "use": key["use"],
-                    "n":   key["n"],
-                    "e":   key["e"],
-                }
-                break
-
-        if not rsa_key:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid token: no matching key found",
+    # Check cache
+    if token in _token_cache:
+        user_info = _token_cache[token]
+    else:
+        # Verify token with GitHub
+        try:
+            resp = httpx.get(
+                "https://api.github.com/user",
+                headers={"Authorization": f"Bearer {token}", "Accept": "application/vnd.github+json"},
+                timeout=5
             )
-
-        payload = jwt.decode(
-            token,
-            rsa_key,
-            algorithms=[ALGORITHM],
-            audience=AUTH0_AUDIENCE,
-            issuer=f"https://{AUTH0_DOMAIN}/",
-        )
-
-        user_id: str = payload.get("sub", "")
-        if not user_id:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Token missing sub claim",
+            if resp.status_code != 200:
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Invalid GitHub token",
+                )
+            
+            gh_user = resp.json()
+            # Fetch emails because primary email might be private
+            email_resp = httpx.get(
+                "https://api.github.com/user/emails",
+                headers={"Authorization": f"Bearer {token}", "Accept": "application/vnd.github+json"},
+                timeout=5
             )
+            email = None
+            if email_resp.status_code == 200:
+                for e in email_resp.json():
+                    if e.get("primary"):
+                        email = e.get("email")
+                        break
+            
+            user_info = {
+                "id": str(gh_user["id"]),
+                "login": gh_user["login"],
+                "email": email or gh_user.get("email")
+            }
+            _token_cache[token] = user_info
+        except httpx.RequestError as e:
+            logger.error(f"GitHub API request failed: {e}")
+            raise HTTPException(status_code=503, detail="Auth service unavailable")
 
-        from database import get_or_create_user
-        email = payload.get("email")
-        db_user = get_or_create_user(user_id, email)
-
-        return User(user_id=user_id, is_admin=(db_user["role"] == "admin"))
-
-    except JWTError as e:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=f"Invalid token: {e}",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
+    from database import get_or_create_user
+    db_user = get_or_create_user(user_info["id"], user_info["email"])
+    return User(user_id=user_info["id"], is_admin=(db_user["role"] == "admin"))

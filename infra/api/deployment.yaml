@@ -50,17 +50,11 @@ spec:
                 secretKeyRef:
                   name: shipzen-ecr-config
                   key: repository_url
-            - name: AUTH0_DOMAIN
+            - name: GITHUB_ENABLED
               valueFrom:
                 secretKeyRef:
-                  name: shipzen-auth0
-                  key: domain
-                  optional: true
-            - name: AUTH0_AUDIENCE
-              valueFrom:
-                secretKeyRef:
-                  name: shipzen-auth0
-                  key: audience
+                  name: shipzen-github
+                  key: enabled
                   optional: true
           resources:
             requests:

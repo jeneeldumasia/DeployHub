@@ -1,19 +1,14 @@
 import NextAuth from "next-auth"
-import Auth0Provider from "next-auth/providers/auth0"
-import CredentialsProvider from "next-auth/providers/credentials"
+import GitHubProvider from "next-auth/providers/github"
 
-// Use Auth0 if configured, otherwise use Stub Credentials
+// Use GitHub if configured, otherwise use Stub Credentials
 const providers = []
 
-if (process.env.AUTH0_CLIENT_ID) {
+if (process.env.GITHUB_CLIENT_ID) {
   providers.push(
-    Auth0Provider({
-      clientId: process.env.AUTH0_CLIENT_ID,
-      clientSecret: process.env.AUTH0_CLIENT_SECRET,
-      issuer: process.env.AUTH0_ISSUER,
-      authorization: {
-        params: { audience: process.env.AUTH0_AUDIENCE },
-      },
+    GitHubProvider({
+      clientId: process.env.GITHUB_CLIENT_ID,
+      clientSecret: process.env.GITHUB_CLIENT_SECRET,
     })
   )
 } else {
