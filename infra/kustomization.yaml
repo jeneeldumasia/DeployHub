@@ -41,7 +41,8 @@ images:
 
   - name: shipzen-controller
     newName: ghcr.io/jeneeldumasia/shipzen-controller
-    newTag: sha-8de93da
+    newTag: sha-88e93b4
+
 
 
 
