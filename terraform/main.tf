@@ -19,10 +19,7 @@ terraform {
       source  = "hashicorp/helm"
       version = "~> 2.12"
     }
-    kubectl = {
-      source  = "gavinbunney/kubectl"
-      version = ">= 1.14.0"
-    }
+
     cloudflare = {
       source  = "cloudflare/cloudflare"
       version = "~> 4.0"
@@ -152,16 +149,7 @@ provider "kubernetes" {
   }
 }
 
-provider "kubectl" {
-  host                   = module.eks.cluster_endpoint
-  cluster_ca_certificate = base64decode(module.eks.cluster_certificate_authority_data)
-  load_config_file       = false
-  exec {
-    api_version = "client.authentication.k8s.io/v1beta1"
-    command     = "aws"
-    args        = ["eks", "get-token", "--cluster-name", module.eks.cluster_name]
-  }
-}
+
 
 # ── ECR Repository ────────────────────────────────────────────────────────────
 # Task 5: ECR repo for built tenant images.
