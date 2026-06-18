@@ -226,7 +226,7 @@ resource "kubernetes_service_account" "builder_sa" {
       "eks.amazonaws.com/role-arn" = module.irsa_builder.iam_role_arn
     }
   }
-  automount_service_account_token = false
+  automount_service_account_token = true
 }
 
 # Removed ecr-pull-token secret, using ESO ECRAuthorizationToken generator instead
