@@ -105,6 +105,14 @@ def main():
 
     logger.info(f"Worker {config.CONSUMER_NAME} started. Listening on stream {config.STREAM_NAME}")
 
+    # Ensure builder_queue and builder_group exist so KEDA can scale the builder
+    try:
+        queue.r.xgroup_create(BUILDER_QUEUE, "builder_group", id='0', mkstream=True)
+        logger.info(f"Initialized consumer group 'builder_group' for stream '{BUILDER_QUEUE}'")
+    except redis.exceptions.ResponseError as e:
+        if "BUSYGROUP" not in str(e):
+            logger.warning(f"Failed to initialize builder_group: {e}")
+
     while True:
         try:
             queue.recover_pending_messages()

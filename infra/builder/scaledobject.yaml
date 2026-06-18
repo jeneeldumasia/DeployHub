@@ -15,4 +15,6 @@ spec:
         address: redis-master.shipzen-system.svc.cluster.local:6379
         stream: builder_queue
         consumerGroup: builder_group
-        pendingEntriesCount: "1" # Scale up for every 1 pending build
+        pendingEntriesCount: "1"
+        lagCount: "1"
+        activationLagCount: "0"
