@@ -13,3 +13,4 @@ resources:
   - gateway.yaml
   - grafana-route.yaml
   - grafana-dashboards.yaml
+  - ecr-token-rotator.yaml
