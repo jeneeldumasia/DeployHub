@@ -1,5 +1,8 @@
 # ShipZen — Full Project Analysis
 
+> [!NOTE]
+> **Historical Document:** This architecture review was performed prior to recent massive refactoring. **All critical issues and technical debt listed in the summary table have been successfully resolved.** For a current list of resolved issues, refer to `ISSUES_AND_RESOLUTIONS.md`.
+
 ## What ShipZen Is
 
 ShipZen is an **Internal Developer Platform (IDP)** — a self-service system where a developer pushes a repo URL, and the platform automatically builds a container image, deploys it to Kubernetes, and routes traffic to it via a unique subdomain. Think of it as a mini Heroku/Vercel built on top of EKS.
@@ -410,3 +413,82 @@ Despite the issues above, the project has strong fundamentals:
 - ✅ **Karpenter node isolation** — builder and tenant workloads on separate node pools with taints
 - ✅ **IRSA everywhere** — no static AWS credentials in the cluster
 - ✅ **GitHub Actions OIDC** with subject restriction to `main` branch only
+
+---
+
+## 🟢 Resolved Issues Log (from First Commit)
+
+### 1. GitHub Actions OIDC Failure on Repository Rename
+* **Issue:** After renaming the GitHub repository from `DeployHub` to `ShipZen`, the deployment pipeline failed with `Not authorized to perform sts:AssumeRoleWithWebIdentity`. GitHub was sending OIDC tokens as `ShipZen`, but the AWS IAM Role's trust policy still expected `DeployHub`.
+* **Resolution:** Manually accessed the AWS IAM Console, located the `DeployHub-AA-SuperRole`, and updated the Trust Relationship condition to expect `repo:jeneeldumasia/ShipZen:ref:refs/heads/main`.
+* **Did it work?** Yes. The pipeline immediately successfully authenticated.
+
+### 2. HCP Terraform "No Valid Credentials" on Remote Run
+* **Issue:** When running `terraform plan` on a newly created `shipzen-prod` HCP Terraform workspace, the pipeline crashed saying it couldn't reach the AWS EC2 metadata endpoint. This occurred because new workspaces default to "Remote Execution" mode, meaning the code ran on HashiCorp servers that lacked AWS credentials, rather than the GitHub runner.
+* **Resolution:** Changed the "Execution Mode" in the HCP Terraform Workspace settings from "Remote" to "Local".
+* **Did it work?** Yes. The execution stayed on the GitHub Actions runner which had temporary AWS credentials injected via OIDC.
+
+### 3. Envoy Gateway CRD Version Mismatch
+* **Issue:** The `shipzen-platform` ArgoCD app failed to sync because it was using an outdated API version for the Envoy Gateway (`config.gateway.envoyproxy.io/v1alpha1`). Because it failed, the AWS NLB was never requested.
+* **Resolution:** Updated the manifests to use the correct API version: `gateway.envoyproxy.io/v1alpha1`.
+* **Did it work?** Yes. ArgoCD successfully synced the gateway and provisioned the Network Load Balancer.
+
+### 4. Webhook Race Conditions & NLB Timeouts
+* **Issue:** The `aws-load-balancer-controller` webhook wasn't ready before `kube-prometheus-stack` tried to deploy, resulting in "no endpoints available for service" errors and causing the NLB provisioning to time out after 10 minutes.
+* **Resolution:** Added strict `depends_on` chains and `time_sleep.wait_for_alb_webhook` in the Terraform configuration to ensure webhooks were fully ready before dependent helm charts deployed.
+* **Did it work?** Yes. The dependency chaining eliminated the race condition.
+
+### 5. Kyverno Pod Security Standard Blocks
+* **Issue:** Kyverno's strict cluster policies blocked the `prometheus-node-exporter` DaemonSet (`disallow-host-namespaces`, `disallow-host-path`).
+* **Resolution:** Disabled the `nodeExporter` component in the Helm chart entirely to allow deployment to proceed safely in a managed EKS environment while maintaining compliance.
+* **Did it work?** Yes.
+
+### 6. UI Docker Build Cache Errors
+* **Issue:** Docker builds for the Next.js UI were failing due to missing cache directories during the build context copy phase.
+* **Resolution:** Modified the `Dockerfile` to explicitly create the `public/` directory prior to the build context copy.
+* **Did it work?** Yes. Builds now complete without cache permission errors.
+
+### 7. Cloudflare Orphaned DNS Records
+* **Issue:** Tearing down the platform left stale `*.shipzen` and `shipzen` CNAME records in Cloudflare, leading to clutter and potential routing conflicts on subsequent runs.
+* **Resolution:** Added a dedicated Cloudflare DNS cleanup script utilizing the Cloudflare API to the `destroy` pipeline.
+* **Did it work?** Yes. DNS records are cleanly wiped on teardown.
+
+### 8. Karpenter Autoscaling Runaway Costs
+* **Issue:** The Karpenter node pools were scaling too aggressively, spinning up expensive instances that threatened to consume the AWS free-tier/student credits too quickly.
+* **Resolution:** Implemented hard resource limits on the Karpenter node pools to keep scaling restricted to minimal, cost-effective boundaries.
+* **Did it work?** Yes.
+
+### 9. Database Connection Leaks in API
+* **Issue:** Previously, the FastAPI application did not use a connection pool, risking DB connection exhaustion. 
+* **Resolution:** Replaced raw `psycopg2.connect()` calls with a robust `psycopg2.pool.ThreadedConnectionPool` and `PooledConnectionWrapper` to ensure connections are properly recycled.
+* **Did it work?** Yes. The API now safely handles concurrent requests without leaking connections.
+
+### 10. Controller Cannot Update Existing Deployments
+* **Issue:** The Controller's reconciliation loop was returning a 409 Conflict when a user deployed a newer image tag for an existing project because it only tried to create resources.
+* **Resolution:** Added explicit `patch_namespaced_deployment` and `patch_namespaced_service` fallback logic in `apply_manifests()` whenever the `create_from_yaml` throws a 409 ApiException.
+* **Did it work?** Yes. Rolling updates now trigger properly upon redeployment.
+
+### 11. Environment Variables Path Mismatch
+* **Issue:** A mismatch between the API storing secrets at `shipzen/{project_name}/` and the Controller attempting to read from `shipzen/{project_name}/{deployment_uuid}` meant environments variables never injected.
+* **Resolution:** Aligned the paths. The `app-deployment.yaml.j2` manifest was updated to extract data directly from `shipzen/{{ project_name }}/`.
+* **Did it work?** Yes.
+
+### 12. ECR Pull Token Not Rotating
+* **Issue:** The Kubernetes cluster used a static AWS token to pull images from ECR, which would expire every 12 hours, eventually breaking pod restarts.
+* **Resolution:** Integrated External Secrets Operator (ESO) `ECRAuthorizationToken` generator in `tenant.yaml.j2` to dynamically rotate and inject fresh ECR tokens every hour.
+* **Did it work?** Yes. 
+
+### 13. Redis Streams Lack End-to-End Guarantees
+* **Issue:** Build tasks could be permanently lost if the Builder pod crashed mid-build because it didn't track pending/un-acked messages.
+* **Resolution:** Implemented a robust `recover_pending_messages` loop using Redis `xpending_range` and `xclaim` in the Builder loop to sweep and re-claim stalled messages.
+* **Did it work?** Yes. Build tasks are now guaranteed to be picked up by another pod.
+
+### 14. Builder Ignores Branch Parameter
+* **Issue:** The API accepted a `branch` parameter, but the Worker dropped the field when moving the message from the `deploy_stream` to the `builder_queue`. As a result, the Builder always checked out the `main` branch.
+* **Resolution:** Explicitly added `"branch": data.get("branch", "main")` to the `handoff_to_builder` dictionary payload in `worker/main.py`.
+* **Did it work?** Yes. Deployments now respect specific branches.
+
+### 15. Dark Mode Legibility on Active Navbar Link
+* **Issue:** In the Next.js UI, the active sidebar navigation item was using white text on a white background when in dark mode.
+* **Resolution:** Appended `dark:text-black` to the `.nav-item.active` class in `globals.css` so the text shifts to black when the active glassmorphism background is bright white.
+* **Did it work?** Yes. The navigation is now highly legible in both dark and light modes.

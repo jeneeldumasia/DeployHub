@@ -101,7 +101,7 @@
   }
 
   .nav-item.active {
-    @apply bg-sidebar-active text-white shadow-md;
+    @apply bg-sidebar-active text-white dark:text-black shadow-md;
   }
 
   /* Card base (Glassmorphism) */

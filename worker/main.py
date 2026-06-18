@@ -23,6 +23,7 @@ def handoff_to_builder(queue: QueueClient, deployment_id: str, data: dict):
     build_data = {
         "deployment_id": deployment_id,
         "repo_url": data.get("repo_url", ""),
+        "branch": data.get("branch", "main"),
         "image_name": data.get("image_name", "")
     }
     queue.r.xadd(BUILDER_QUEUE, build_data)
