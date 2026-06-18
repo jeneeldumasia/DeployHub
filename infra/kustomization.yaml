@@ -17,7 +17,8 @@ resources:
 images:
   - name: shipzen-api
     newName: ghcr.io/jeneeldumasia/shipzen-api
-    newTag: sha-0333015
+    newTag: sha-0aecb0e
+
 
 
 
@@ -31,7 +32,8 @@ images:
 
   - name: shipzen-worker
     newName: ghcr.io/jeneeldumasia/shipzen-worker
-    newTag: sha-0333015
+    newTag: sha-0aecb0e
+
 
 
 
