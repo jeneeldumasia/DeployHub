@@ -61,7 +61,6 @@ def ensure_ecr_repository(project_id: str):
             )
     except Exception as e:
         logger.error(f"Failed to ensure ECR repository exists: {e}")
-        raise
 
 
 def get_db_connection():
