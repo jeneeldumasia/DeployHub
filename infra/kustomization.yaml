@@ -50,7 +50,8 @@ images:
 
   - name: shipzen-builder
     newName: ghcr.io/jeneeldumasia/shipzen-builder
-    newTag: sha-1863a33
+    newTag: sha-2179d9e
+
 
 
 
