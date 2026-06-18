@@ -50,13 +50,11 @@
 
 **Last run: IN PROGRESS / SUCCESS**
 
-**Issues Fixed This Session:**
-- **NLB 10-minute Timeout:** Caused by multiple chained race conditions and API changes.
-- **ArgoCD App Race Conditions:** `shipzen-platform` ArgoCD app was syncing before operators (AWS ALB Controller, Envoy, Cert Manager) were ready. Added strict `depends_on` chains in `argocd.tf`.
-- **Envoy Gateway CRD Version Mismatch:** `EnvoyProxy` apiVersion was using `config.gateway.envoyproxy.io/v1alpha1` instead of `gateway.envoyproxy.io/v1alpha1`, causing the `shipzen-platform` ArgoCD app to fail its sync, which meant the `Gateway` resource was never deployed and the AWS NLB was never requested.
-- **Webhook Race Conditions:** `aws-load-balancer-controller` webhook wasn't ready before `kube-prometheus-stack` tried to deploy, causing `no endpoints available for service` errors. Added `time_sleep.wait_for_alb_webhook` dependencies.
-- **Kyverno Pod Security Standard Blocks:** Kyverno's strict cluster policies blocked the `prometheus-node-exporter` DaemonSet (`disallow-host-namespaces`, `disallow-host-path`). Disabled `nodeExporter` in the Helm chart to allow deployment to proceed safely in a managed EKS environment.
-- **DNS Resolution Errors:** `kubectl` hung locally due to stale EKS cluster endpoints. Resolved by running `aws eks update-kubeconfig`.
+**Issues Fixed This Session (June 18/19):**
+- **GitHub Actions IAM Role:** Added `eks:DescribeCluster` permission to `ShipZenGitHubActionsRole` so the deployment pipeline can securely update `kubeconfig`.
+- **UI Background Image:** Migrated from raw `<img>` to Next.js `<Image>` for `auth_bg.png` to fix hydration bugs and ensure priority loading.
+- **Worker Crash on Pending Messages:** The queue consumer crashed because `redis-py`'s `xautoclaim` returns 3 elements instead of 2. Fixed python unpacking bug and synced the cluster to the latest `sha-88e93b4` image.
+- **Builder IAM Permissions:** The builder pod crashed on `pack --publish` due to AWS `AccessDenied`. Patched `shipzen-builder-sa` ServiceAccount to set `automount_service_account_token = true` in `terraform/main.tf`, allowing the builder to assume the `ShipZenBuilderRole` via IRSA to push logs to S3 and images to ECR.
 
 ---
 
@@ -74,15 +72,17 @@
 | OBS-3 | P1 | Missing `shipzen_deployment_success_total`, `_failure_total`, `build_duration_seconds` metrics |
 | FEAT-3 | P2 | GitHub Webhook → auto-deploy not implemented |
 | SEC-1 | P2 | Re-enable `node-exporter` by creating a fine-grained Kyverno `PolicyException`. |
+| UI-1 | P2 | Deployment detail timeline doesn't visually indicate a `Failed` state, leaving it looking "stuck" on Queued or Building. |
 
 ---
 
 ## Next Session
 
-1. **Confirm pipeline passes fully** with the updated EnvoyProxy API version.
+1. **Test E2E Deployment** with a valid public repository to ensure builder succeeds end-to-end.
 2. Implement Kyverno `PolicyException` for `node-exporter`.
-3. Proceed with further application development or monitoring fixes.
+3. Add a red "Failed" visual state to the UI timeline so failed builds are clearly visible.
+4. Clean up scratch files (`check_db.*`, `republish_stuck.py`).
 
 ---
 
-*Last updated: 2026-06-17. Resolved NLB timeouts, Envoy Gateway API version mismatch, webhook race conditions, and Kyverno PSS blocks.*
+*Last updated: 2026-06-19. Resolved UI auth image, GitHub Actions IAM role, Redis xautoclaim unpacking bug, and Builder IRSA token mount.*
