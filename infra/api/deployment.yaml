@@ -42,7 +42,7 @@ spec:
             - name: REDIS_HOST
               value: "redis-master.shipzen-system.svc.cluster.local"
             - name: STREAM_NAME
-              value: "builder_queue"
+              value: "deploy_stream"
             - name: UI_ORIGIN
               value: "https://shipzen.jeneeldumasia.codes"
             - name: ECR_REPOSITORY_URL

@@ -42,6 +42,7 @@ class QueueClient:
     def recover_pending_messages(self):
         """Pending Message Recovery via XAUTOCLAIM."""
         start_id = '0-0'
+        all_claimed = []
         while True:
             next_start, claimed_messages = self.r.xautoclaim(
                 self.stream, self.group, self.consumer,
@@ -52,10 +53,12 @@ class QueueClient:
                 # msg is typically [message_id, data]
                 message_id = msg[0]
                 logger.info(f"Recovered pending message {message_id} via XAUTOCLAIM")
+                all_claimed.append(msg)
                 
             if next_start == '0-0':
                 break
             start_id = next_start
+        return all_claimed
 
     def update_metrics(self):
         try:

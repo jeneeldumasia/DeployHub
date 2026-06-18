@@ -116,7 +116,11 @@ def main():
 
     while True:
         try:
-            queue.recover_pending_messages()
+            claimed = queue.recover_pending_messages()
+            if claimed:
+                for msg_id, data in claimed:
+                    process_message(queue, state_machine, msg_id, data)
+                    
             messages = queue.get_messages(count=5, block_ms=2000)
             if messages:
                 for stream_name, msg_list in messages:
