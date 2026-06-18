@@ -18,7 +18,7 @@ jobs:
   build-and-push:
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write
       packages: write
     strategy:
       matrix:
@@ -56,3 +56,44 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+
+      - name: Update Kustomization Tag and Commit
+        run: |
+          SHORT_SHA=$(git rev-parse --short HEAD)
+          TAG="sha-${SHORT_SHA}"
+          
+          # Use python to safely update the kustomization.yaml newTag for this component
+          python3 -c "
+          import re
+          import sys
+          component = sys.argv[1]
+          tag = sys.argv[2]
+          with open('infra/kustomization.yaml', 'r') as f:
+              lines = f.readlines()
+          for i, line in enumerate(lines):
+              if f'name: shipzen-{component}' in line:
+                  lines[i+2] = re.sub(r'newTag: .*', f'newTag: {tag}\n', lines[i+2])
+          with open('infra/kustomization.yaml', 'w') as f:
+              f.writelines(lines)
+          " "${{ matrix.component }}" "$TAG"
+          
+          git config user.name "GitHub Actions Bot"
+          git config user.email "actions@github.com"
+          git add infra/kustomization.yaml
+          
+          # Only commit if there are changes
+          if ! git diff-index --quiet HEAD; then
+            git commit -m "Update ${{ matrix.component }} image to $TAG [skip ci]"
+            
+            # Retry loop for git push to handle concurrent matrix job conflicts
+            for i in {1..5}; do
+              # We rebase instead of merge to keep history clean
+              git pull --rebase origin main
+              if git push origin main; then
+                echo "Successfully pushed tag update"
+                break
+              fi
+              echo "Push failed, retrying in 3 seconds..."
+              sleep 3
+            done
+          fi
