@@ -68,14 +68,14 @@ export function CommandPalette() {
             <Command.Group heading="Actions" className="px-2 py-1.5 text-xs font-medium text-text-secondary">
               <Command.Item 
                 onSelect={() => { setOpen(false); router.push("/projects/new"); }}
-                className="flex items-center gap-2 px-3 py-2 text-sm text-zinc-300 rounded-md cursor-pointer aria-selected:bg-brand aria-selected:text-white transition-colors"
+                className="flex items-center gap-2 px-3 py-2 text-sm text-zinc-300 rounded-md cursor-pointer aria-selected:bg-brand aria-selected:text-canvas-bg transition-colors"
               >
                 <Plus size={14} /> New Project
                 <span className="ml-auto text-[10px] text-text-secondary aria-selected:text-white/70">N</span>
               </Command.Item>
               <Command.Item 
                 onSelect={() => { setOpen(false); router.push("/"); }}
-                className="flex items-center gap-2 px-3 py-2 text-sm text-zinc-300 rounded-md cursor-pointer aria-selected:bg-brand aria-selected:text-white transition-colors"
+                className="flex items-center gap-2 px-3 py-2 text-sm text-zinc-300 rounded-md cursor-pointer aria-selected:bg-brand aria-selected:text-canvas-bg transition-colors"
               >
                 <Terminal size={14} /> Dashboard
               </Command.Item>

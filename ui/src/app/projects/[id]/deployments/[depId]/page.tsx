@@ -27,9 +27,9 @@ function Pipeline({ state }: { state: string }) {
             <div className="flex flex-col items-center gap-1.5">
               <div className={[
                 "w-7 h-7 rounded-full border-2 flex items-center justify-center text-xs font-bold transition-all",
-                done   ? "bg-emerald-500 border-emerald-500 text-white"            : "",
-                active ? "bg-brand border-brand text-white shadow-glow animate-pulse-slow" : "",
-                failed ? "bg-red-500 border-red-500 text-white"                    : "",
+                done   ? "bg-emerald-500 border-emerald-500 text-canvas-bg"            : "",
+                active ? "bg-brand border-brand text-canvas-bg shadow-glow animate-pulse-slow" : "",
+                failed ? "bg-red-500 border-red-500 text-canvas-bg"                    : "",
                 !done && !active && !failed ? "bg-white border-slate-200 text-text-secondary" : "",
               ].join(" ")}>
                 {done ? "✓" : i + 1}

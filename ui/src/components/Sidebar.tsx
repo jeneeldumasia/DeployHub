@@ -20,7 +20,7 @@ export function Sidebar({ user }: { user?: any }) {
       {/* Logo */}
       <div className="flex items-center gap-2.5 px-5 py-5 border-b border-sidebar-border">
         <div className="w-8 h-8 rounded-lg bg-brand flex items-center justify-center shadow-glow">
-          <Rocket size={16} className="text-white" />
+          <Rocket size={16} className="text-canvas-bg" />
         </div>
         <div>
           <p className="text-sidebar-heading font-bold text-sm leading-none">ShipZen</p>
