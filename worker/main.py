@@ -127,7 +127,7 @@ def main():
                     for msg_id, data in msg_list:
                         process_message(queue, state_machine, msg_id, data)
         except Exception as e:
-            logger.error(f"Queue read error: {e}")
+            logger.exception("Queue read error")
             time.sleep(2)
 
 

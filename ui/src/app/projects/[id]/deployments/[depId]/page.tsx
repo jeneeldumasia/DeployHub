@@ -11,16 +11,24 @@ export const dynamic = "force-dynamic";
 
 const STATE_STEPS = ["Queued", "Building", "Deploying", "Verifying", "Running"];
 
-function Pipeline({ state }: { state: string }) {
-  const current = STATE_STEPS.indexOf(state);
+function Pipeline({ state, builds }: { state: string, builds: any[] }) {
   const isFailed = state === "Failed" || state === "DLQ";
+  
+  let failIndex = -1;
+  if (isFailed) {
+    if (builds.length === 0) failIndex = 0; // Failed in Queued
+    else if (builds.some(b => b.status === "Failed")) failIndex = 1; // Failed in Building
+    else failIndex = 2; // Failed in Deploying or later
+  }
+
+  const current = isFailed ? failIndex : STATE_STEPS.indexOf(state);
 
   return (
     <div className="flex items-center gap-0">
       {STATE_STEPS.map((step, i) => {
-        const done    = !isFailed && current > i;
+        const done    = (!isFailed && current > i) || (isFailed && i < current);
         const active  = !isFailed && current === i;
-        const failed  = isFailed && i <= Math.max(current, 1);
+        const failed  = isFailed && current === i;
         return (
           <div key={step} className="flex items-center">
             {/* Step node */}
@@ -29,10 +37,10 @@ function Pipeline({ state }: { state: string }) {
                 "w-7 h-7 rounded-full border-2 flex items-center justify-center text-xs font-bold transition-all",
                 done   ? "bg-emerald-500 border-emerald-500 text-canvas-bg"            : "",
                 active ? "bg-brand border-brand text-canvas-bg shadow-glow animate-pulse-slow" : "",
-                failed ? "bg-red-500 border-red-500 text-canvas-bg"                    : "",
+                failed ? "bg-red-500 border-red-500 text-canvas-bg"    : "",
                 !done && !active && !failed ? "bg-white border-slate-200 text-text-secondary" : "",
               ].join(" ")}>
-                {done ? "✓" : i + 1}
+                {done ? "✓" : failed ? "✗" : i + 1}
               </div>
               <span className={[
                 "text-[10px] font-medium whitespace-nowrap",
@@ -41,14 +49,14 @@ function Pipeline({ state }: { state: string }) {
                 failed ? "text-red-600"  : "",
                 !done && !active && !failed ? "text-text-secondary" : "",
               ].join(" ")}>
-                {step}
+                {failed ? "Failed" : step}
               </span>
             </div>
             {/* Connector */}
             {i < STATE_STEPS.length - 1 && (
               <div className={[
                 "h-0.5 w-10 mx-1 mb-5 transition-all",
-                done ? "bg-emerald-400" : "bg-slate-200",
+                done ? "bg-emerald-400" : failed && i === current ? "bg-red-200" : "bg-slate-200",
               ].join(" ")} />
             )}
           </div>
@@ -126,7 +134,7 @@ export default async function DeploymentPage({ params }: { params: { id: string;
 
       {/* Pipeline tracker */}
       <div className="card p-6 mb-6 overflow-x-auto">
-        <Pipeline state={deployment.state} />
+        <Pipeline state={deployment.state} builds={buildList} />
         {deployment.state === "Failed" && (
           <div className="mt-4 pt-4 border-t border-red-100">
             <div className="flex items-start gap-2 text-sm text-red-600">

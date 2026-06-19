@@ -81,10 +81,10 @@ resource "helm_release" "kube_prometheus_stack" {
     value = "ALL"
   }
 
-  # Disable nodeExporter to comply with Kyverno Pod Security Standards (no host networking/paths)
+  # Enable nodeExporter. Exception added via Kyverno PolicyException.
   set {
     name  = "nodeExporter.enabled"
-    value = "false"
+    value = "true"
   }
 
   depends_on = [time_sleep.wait_for_cluster_auth, time_sleep.wait_for_alb_webhook]

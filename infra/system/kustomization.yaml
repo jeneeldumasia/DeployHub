@@ -12,5 +12,6 @@ resources:
   - cloudflare-secret.yaml
   - gateway.yaml
   - grafana-route.yaml
+  - kyverno-exception.yaml
   - grafana-dashboards.yaml
   - ecr-token-rotator.yaml

@@ -1,0 +1,20 @@
+apiVersion: kyverno.io/v2alpha1
+kind: PolicyException
+metadata:
+  name: node-exporter-exception
+  namespace: observability
+spec:
+  exceptions:
+  - policyName: "*"
+    ruleNames:
+    - "*"
+  match:
+    any:
+    - resources:
+        kinds:
+        - Pod
+        - DaemonSet
+        namespaces:
+        - observability
+        names:
+        - "*node-exporter*"
