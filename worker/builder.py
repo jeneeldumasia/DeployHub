@@ -219,14 +219,19 @@ fi
                         "containers": [
                             {
                                 "name": "pack",
-                                "image": "buildpacksio/pack:0.33.2",
-                                "command": pack_args,
+                                "image": "docker:24-dind",
+                                "securityContext": {
+                                    "privileged": True
+                                },
                                 "env": env_vars,
                                 "volumeMounts": [{"name": "workspace", "mountPath": "/workspace"}],
-                                "securityContext": {
-                                    "allowPrivilegeEscalation": False,
-                                    "seccompProfile": {"type": "RuntimeDefault"}
-                                }
+                                "command": ["sh", "-c"],
+                                "args": [
+                                    "dockerd --tls=false & "
+                                    "while ! docker info >/dev/null 2>&1; do sleep 1; done; "
+                                    "wget -qO- https://github.com/buildpacks/pack/releases/download/v0.33.2/pack-v0.33.2-linux.tgz | tar -xz -C /usr/local/bin && "
+                                    + " ".join(pack_args)
+                                ]
                             }
                         ],
                         "volumes": [
