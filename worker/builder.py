@@ -13,12 +13,6 @@ def get_ecr_credentials():
         print(f"Warning: Failed to fetch ECR token: {e}")
         return "", ""
 
-import yaml
-import json
-import logging
-import subprocess
-import tempfile
-import shutil
 from abc import ABC, abstractmethod
 from typing import Dict, Any
 
@@ -44,8 +38,6 @@ class DockerfileBuilder(Builder):
         token_resp, ecr_token = get_ecr_credentials()
         registry = image_uri.split('/')[0] if '/' in image_uri else ''
         docker_config = f'{{"auths":{{"{registry}":{{"auth":"{token_resp}"}}}}}}'
-        token_resp, ecr_token = get_ecr_credentials()
-        registry = image_uri.split('/')[0] if '/' in image_uri else ''
         
         return {
             "apiVersion": "batch/v1",
@@ -79,11 +71,7 @@ class DockerfileBuilder(Builder):
                                 "image": "alpine/git:2.43.0",
                                 "command": ["sh", "-c"],
                                 "args": [
-                                    "dockerd --tls=false & "
-                                    "while ! docker info >/dev/null 2>&1; do sleep 1; done; "
-                                    f"echo '{ecr_token}' | docker login --username AWS --password-stdin {registry} && "
-                                    "wget -qO- https://github.com/buildpacks/pack/releases/download/v0.33.2/pack-v0.33.2-linux.tgz | tar -xz -C /usr/local/bin && "
-                                    + " ".join(pack_args)
+                                    "git clone --depth=1 --branch " + branch + " " + repo_url + " /workspace"
                                 ],
                                 "volumeMounts": [{"name": "workspace", "mountPath": "/workspace"}],
                                 "securityContext": {
@@ -130,6 +118,7 @@ class RailpackBuilder(Builder):
 
     def generate_job_manifest(self, deployment_id: str, repo_url: str, branch: str, image_uri: str, overrides: dict) -> Dict[str, Any]:
         # For now, Railpack uses buildpacks as a placeholder until native compiler images are built
+        token_resp, ecr_token = get_ecr_credentials()
         b = BuildpackBuilder()
         return b.generate_job_manifest(deployment_id, repo_url, branch, image_uri, overrides)
 
@@ -139,6 +128,8 @@ class BuildpackBuilder(Builder):
         return True  # Fallback for all other repos
 
     def generate_job_manifest(self, deployment_id: str, repo_url: str, branch: str, image_uri: str, overrides: dict) -> Dict[str, Any]:
+        token_resp, ecr_token = get_ecr_credentials()
+        registry = image_uri.split('/')[0] if '/' in image_uri else ''
         
         # Build the script for initContainer that clones and applies the SPA hack if needed
         # Overrides contains instructions if we need to inject server.js
