@@ -57,6 +57,9 @@ spec:
       containers:
         - name: app
           image: {{ image_uri }}
+          env:
+            - name: PORT
+              value: "{{ port | default(8080) }}"
           envFrom:
             - secretRef:
                 name: {{ deployment_name }}-secrets-sync
