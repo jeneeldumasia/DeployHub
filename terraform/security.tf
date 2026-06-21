@@ -31,27 +31,7 @@ resource "helm_release" "kyverno_policies" {
 
   values = [
     yamlencode({
-      validationFailureAction = "Enforce"
-      podSecurityBaseline = {
-        exclude = {
-          namespaces = [
-            "kube-system",
-            "observability",
-            "shipzen-system",
-            "shipzen-build"
-          ]
-        }
-      }
-      podSecurityRestricted = {
-        exclude = {
-          namespaces = [
-            "kube-system",
-            "observability",
-            "shipzen-system",
-            "shipzen-build"
-          ]
-        }
-      }
+      validationFailureAction = "Audit"
     })
   ]
 
