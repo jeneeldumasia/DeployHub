@@ -208,12 +208,12 @@ resource "kubernetes_namespace" "shipzen_build" {
   metadata {
     name = "shipzen-build"
     labels = {
-      "pod-security.kubernetes.io/enforce"         = "restricted"
+      "pod-security.kubernetes.io/enforce"         = "privileged"
       "pod-security.kubernetes.io/enforce-version" = "latest"
-      "pod-security.kubernetes.io/audit"           = "restricted"
-      "pod-security.kubernetes.io/audit-version"   = "latest"
-      "pod-security.kubernetes.io/warn"            = "restricted"
+      "pod-security.kubernetes.io/warn"            = "privileged"
       "pod-security.kubernetes.io/warn-version"    = "latest"
+      "pod-security.kubernetes.io/audit"           = "privileged"
+      "pod-security.kubernetes.io/audit-version"   = "latest"
     }
   }
 }
