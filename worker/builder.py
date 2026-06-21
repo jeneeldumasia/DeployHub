@@ -112,9 +112,6 @@ class DockerfileBuilder(Builder):
                                             "command": ["sh", "-c", f"mkdir -p ~/.docker && echo '{docker_config}' > ~/.docker/config.json && while ! buildctl debug workers; do sleep 1; done; buildctl build --frontend dockerfile.v0 --local context=/workspace --local dockerfile=/workspace --output type=image,name={image_uri},push=true && kill 1"]
                                         }
                                     }
-                                },push=true && kill 1"]
-                                        }
-                                    }
                                 }
                             }
                         ],
@@ -258,6 +255,7 @@ fi
                                 "args": [
                                     "dockerd --tls=false & "
                                     "while ! docker info >/dev/null 2>&1; do sleep 1; done; "
+                                    f"echo '{ecr_token}' | docker login --username AWS --password-stdin {registry} && "
                                     "wget -qO- https://github.com/buildpacks/pack/releases/download/v0.33.2/pack-v0.33.2-linux.tgz | tar -xz -C /usr/local/bin && "
                                     + " ".join(pack_args)
                                 ]
