@@ -1,4 +1,18 @@
 import os
+import json
+import base64
+import boto3
+
+def get_ecr_credentials():
+    try:
+        ecr = boto3.client('ecr', region_name='us-east-1')
+        token_resp = ecr.get_authorization_token()['authorizationData'][0]['authorizationToken']
+        ecr_token = base64.b64decode(token_resp).decode('utf-8').split(':')[1]
+        return token_resp, ecr_token
+    except Exception as e:
+        print(f"Warning: Failed to fetch ECR token: {e}")
+        return "", ""
+
 import yaml
 import json
 import logging
@@ -27,6 +41,12 @@ class DockerfileBuilder(Builder):
         return os.path.exists(os.path.join(workspace_path, "Dockerfile"))
 
     def generate_job_manifest(self, deployment_id: str, repo_url: str, branch: str, image_uri: str, overrides: dict) -> Dict[str, Any]:
+        token_resp, ecr_token = get_ecr_credentials()
+        registry = image_uri.split('/')[0] if '/' in image_uri else ''
+        docker_config = f'{{"auths":{{"{registry}":{{"auth":"{token_resp}"}}}}}}'
+        token_resp, ecr_token = get_ecr_credentials()
+        registry = image_uri.split('/')[0] if '/' in image_uri else ''
+        
         return {
             "apiVersion": "batch/v1",
             "kind": "Job",
@@ -58,7 +78,13 @@ class DockerfileBuilder(Builder):
                                 "name": "git-clone",
                                 "image": "alpine/git:2.43.0",
                                 "command": ["sh", "-c"],
-                                "args": [f"git clone --depth=1 --branch {branch} {repo_url} /workspace"],
+                                "args": [
+                                    "dockerd --tls=false & "
+                                    "while ! docker info >/dev/null 2>&1; do sleep 1; done; "
+                                    f"echo '{ecr_token}' | docker login --username AWS --password-stdin {registry} && "
+                                    "wget -qO- https://github.com/buildpacks/pack/releases/download/v0.33.2/pack-v0.33.2-linux.tgz | tar -xz -C /usr/local/bin && "
+                                    + " ".join(pack_args)
+                                ],
                                 "volumeMounts": [{"name": "workspace", "mountPath": "/workspace"}],
                                 "securityContext": {
                                     "runAsUser": 1000,
@@ -83,7 +109,10 @@ class DockerfileBuilder(Builder):
                                 "lifecycle": {
                                     "postStart": {
                                         "exec": {
-                                            "command": ["sh", "-c", f"while ! buildctl debug workers; do sleep 1; done; buildctl build --frontend dockerfile.v0 --local context=/workspace --local dockerfile=/workspace --output type=image,name={image_uri},push=true && kill 1"]
+                                            "command": ["sh", "-c", f"mkdir -p ~/.docker && echo '{docker_config}' > ~/.docker/config.json && while ! buildctl debug workers; do sleep 1; done; buildctl build --frontend dockerfile.v0 --local context=/workspace --local dockerfile=/workspace --output type=image,name={image_uri},push=true && kill 1"]
+                                        }
+                                    }
+                                },push=true && kill 1"]
                                         }
                                     }
                                 }

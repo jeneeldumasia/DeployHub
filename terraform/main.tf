@@ -183,7 +183,7 @@ module "irsa_builder" {
   oidc_providers = {
     main = {
       provider_arn               = module.eks.oidc_provider_arn
-      namespace_service_accounts = ["shipzen-build:shipzen-builder-sa"]
+      namespace_service_accounts = ["shipzen-build:shipzen-builder-sa", "shipzen-system:shipzen-worker-sa"]
     }
   }
 }
