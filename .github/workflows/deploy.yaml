@@ -107,7 +107,7 @@ jobs:
         run: |
           echo "Waiting for Network Load Balancer to be provisioned by AWS..."
           ELAPSED=0
-          MAX_WAIT=600
+          MAX_WAIT=180
           NLB_URL=""
           while [ $ELAPSED -lt $MAX_WAIT ]; do
             # Scan all namespaces for the LoadBalancer service instead of hardcoding the dynamically generated name
@@ -121,7 +121,13 @@ jobs:
             ELAPSED=$((ELAPSED+10))
           done
           if [ -z "$NLB_URL" ]; then
-            echo "Error: NLB was not provisioned in time."
+            echo "Error: NLB was not provisioned in time. Dumping cluster state for debugging..."
+            kubectl get svc -A || true
+            kubectl get gatewayclass -A || true
+            kubectl get gateway -A -o yaml || true
+            kubectl get externalsecret -A -o yaml || true
+            kubectl get secret shipzen-tls-cert -n shipzen-system || true
+            kubectl get events -A --sort-by='.lastTimestamp' | tail -n 50 || true
             exit 1
           fi
           echo "NLB_URL=$NLB_URL" >> $GITHUB_ENV
