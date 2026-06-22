@@ -1,12 +1,12 @@
 name: Auto-Destroy (Deadman Switch)
 
-# Runs every hour. If the EKS cluster has been alive for more than 4 hours,
+# Runs every 8 hours. If the EKS cluster has been alive for more than 8 hours,
 # it triggers the destroy workflow automatically to protect credits.
 # Adjust MAX_UPTIME_HOURS to your preference.
 
 on:
   schedule:
-    - cron: '0 * * * *' # Every hour on the hour
+    - cron: '0 */8 * * *' # Every 8 hours
   workflow_dispatch:     # Also allow manual trigger for testing
 
 permissions:
