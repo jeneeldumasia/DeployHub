@@ -107,7 +107,7 @@ jobs:
         run: |
           echo "Waiting for Network Load Balancer to be provisioned by AWS..."
           ELAPSED=0
-          MAX_WAIT=180
+          MAX_WAIT=600
           NLB_URL=""
           while [ $ELAPSED -lt $MAX_WAIT ]; do
             # Scan all namespaces for the LoadBalancer service instead of hardcoding the dynamically generated name
