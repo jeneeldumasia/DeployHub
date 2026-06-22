@@ -17,6 +17,12 @@ resource "helm_release" "argocd" {
   chart            = "argo-cd"
   namespace        = "argocd"
   create_namespace = true
+
+  set {
+    name  = "configs.cm.timeout\\.reconciliation"
+    value = "15s"
+  }
+
   depends_on = [time_sleep.wait_for_cluster_auth, helm_release.kube_prometheus_stack]
 }
 
