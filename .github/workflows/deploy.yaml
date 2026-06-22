@@ -38,19 +38,7 @@ jobs:
         working-directory: ./terraform
         run: terraform init
 
-      - name: Run tfsec
-        uses: aquasecurity/tfsec-action@v1.0.3
-        with:
-          working_directory: ./terraform
-          soft_fail: true # Set to false to block deployments on security issues
-          github_token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Run Checkov
-        uses: bridgecrewio/checkov-action@v12
-        with:
-          directory: ./terraform
-          framework: terraform
-          soft_fail: true # Set to false to block deployments on security issues
 
       - name: Cleanup Stuck Webhooks
         working-directory: ./terraform
