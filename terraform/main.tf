@@ -24,7 +24,15 @@ terraform {
       source  = "cloudflare/cloudflare"
       version = "~> 4.0"
     }
+    tls = {
+      source  = "hashicorp/tls"
+      version = "~> 4.0"
+    }
   }
+}
+
+provider "cloudflare" {
+  api_token = var.cloudflare_api_token
 }
 
 provider "aws" {
@@ -231,16 +239,39 @@ resource "kubernetes_service_account" "builder_sa" {
 
 # Removed ecr-pull-token secret, using ESO ECRAuthorizationToken generator instead
 
-# ── Cloudflare API Token Secret ───────────────────────────────────────────────
-# Used by External Secrets Operator to inject Cloudflare credentials for Cert-Manager
-resource "aws_secretsmanager_secret" "cloudflare_api_token" {
-  name                    = "shipzen/cloudflare-api-token"
+# ── Cloudflare Origin CA Certificate ───────────────────────────────────────────
+# Replaces Let's Encrypt / Cert-Manager entirely. Valid for 15 years.
+resource "tls_private_key" "origin_cert" {
+  algorithm = "RSA"
+}
+
+resource "tls_cert_request" "origin_cert" {
+  private_key_pem = tls_private_key.origin_cert.private_key_pem
+
+  subject {
+    common_name  = "shipzen.jeneeldumasia.codes"
+    organization = "ShipZen"
+  }
+}
+
+resource "cloudflare_origin_ca_certificate" "origin_cert" {
+  certificate_request = tls_cert_request.origin_cert.cert_request_pem
+  hostnames           = ["*.shipzen.jeneeldumasia.codes", "shipzen.jeneeldumasia.codes"]
+  request_type        = "origin-rsa"
+  requested_validity  = 5475 # 15 years
+}
+
+resource "aws_secretsmanager_secret" "cloudflare_origin_cert" {
+  name                    = "shipzen/cloudflare-origin-cert"
   recovery_window_in_days = 0
 }
 
-resource "aws_secretsmanager_secret_version" "cloudflare_api_token" {
-  secret_id     = aws_secretsmanager_secret.cloudflare_api_token.id
-  secret_string = jsonencode({ "api-token" = var.cloudflare_api_token })
+resource "aws_secretsmanager_secret_version" "cloudflare_origin_cert" {
+  secret_id     = aws_secretsmanager_secret.cloudflare_origin_cert.id
+  secret_string = jsonencode({
+    "tls.crt" = cloudflare_origin_ca_certificate.origin_cert.certificate
+    "tls.key" = tls_private_key.origin_cert.private_key_pem
+  })
 }
 
 # ── S3 Bucket for Build Logs ─────────────────────────────────────────────────

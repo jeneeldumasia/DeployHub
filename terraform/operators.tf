@@ -77,8 +77,8 @@ resource "helm_release" "external_secrets" {
     value = module.irsa_eso.iam_role_arn
   }
 
-  # ESO depends on cert-manager being ready (it uses webhook TLS certs)
-  depends_on = [time_sleep.wait_for_cluster_auth, helm_release.cert_manager]
+  # ESO used to depend on cert-manager, now it does not
+  depends_on = [time_sleep.wait_for_cluster_auth]
 }
 
 # ── AWS Load Balancer Controller ─────────────────────────────────────────────
@@ -273,21 +273,6 @@ resource "time_sleep" "wait_for_alb_webhook" {
   create_duration = "45s"
 }
 
-# ── Cert Manager ─────────────────────────────────────────────────────────────
-resource "helm_release" "cert_manager" {
-  name             = "cert-manager"
-  repository       = "https://charts.jetstack.io"
-  chart            = "cert-manager"
-  namespace        = "cert-manager"
-  create_namespace = true
-
-  set {
-    name  = "installCRDs"
-    value = "true"
-  }
-
-  depends_on = [time_sleep.wait_for_cluster_auth, time_sleep.wait_for_alb_webhook]
-}
 
 # ── Karpenter ────────────────────────────────────────────────────────────────
 resource "helm_release" "karpenter" {

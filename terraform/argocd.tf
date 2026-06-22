@@ -62,7 +62,6 @@ EOT
     helm_release.argocd,
     helm_release.envoy_gateway,
     helm_release.aws_load_balancer_controller,
-    helm_release.external_secrets,
-    helm_release.cert_manager
+    helm_release.external_secrets
   ]
 }

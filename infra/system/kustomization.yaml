@@ -6,10 +6,8 @@ resources:
   - schema-configmap.yaml
   - schema-job.yaml
   - servicemonitors.yaml
-  - clusterissuer.yaml
-  - certificate.yaml
   - alertmanager-config.yaml
-  - cloudflare-secret.yaml
+  - shipzen-tls-cert.yaml
   - gateway.yaml
   - grafana-route.yaml
   - kyverno-exception.yaml
