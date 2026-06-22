@@ -17,8 +17,8 @@ spec:
     - secretKey: tls.crt
       remoteRef:
         key: shipzen/cloudflare-origin-cert
-        property: tls.crt
+        property: cert
     - secretKey: tls.key
       remoteRef:
         key: shipzen/cloudflare-origin-cert
-        property: tls.key
+        property: key

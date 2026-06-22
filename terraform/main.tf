@@ -269,8 +269,8 @@ resource "aws_secretsmanager_secret" "cloudflare_origin_cert" {
 resource "aws_secretsmanager_secret_version" "cloudflare_origin_cert" {
   secret_id     = aws_secretsmanager_secret.cloudflare_origin_cert.id
   secret_string = jsonencode({
-    "tls.crt" = cloudflare_origin_ca_certificate.origin_cert.certificate
-    "tls.key" = tls_private_key.origin_cert.private_key_pem
+    "cert" = cloudflare_origin_ca_certificate.origin_cert.certificate
+    "key"  = tls_private_key.origin_cert.private_key_pem
   })
 }
 
