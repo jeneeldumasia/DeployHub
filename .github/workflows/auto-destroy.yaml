@@ -15,7 +15,7 @@ permissions:
   actions: write # Required to trigger the destroy workflow
 
 env:
-  MAX_UPTIME_HOURS: 4
+  MAX_UPTIME_HOURS: 8
   CLUSTER_NAME: shipzen-cluster
   AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
 
