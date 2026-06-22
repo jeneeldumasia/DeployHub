@@ -255,10 +255,10 @@ resource "tls_cert_request" "origin_cert" {
 }
 
 resource "cloudflare_origin_ca_certificate" "origin_cert" {
-  certificate_request = tls_cert_request.origin_cert.cert_request_pem
-  hostnames           = ["*.shipzen.jeneeldumasia.codes", "shipzen.jeneeldumasia.codes"]
-  request_type        = "origin-rsa"
-  requested_validity  = 5475 # 15 years
+  csr                = tls_cert_request.origin_cert.cert_request_pem
+  hostnames          = ["*.shipzen.jeneeldumasia.codes", "shipzen.jeneeldumasia.codes"]
+  request_type       = "origin-rsa"
+  requested_validity = 5475 # 15 years
 }
 
 resource "aws_secretsmanager_secret" "cloudflare_origin_cert" {
