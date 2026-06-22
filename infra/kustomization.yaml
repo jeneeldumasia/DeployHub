@@ -13,7 +13,8 @@ resources:
 images:
   - name: shipzen-api
     newName: ghcr.io/jeneeldumasia/shipzen-api
-    newTag: sha-2d7fe42
+    newTag: sha-6f54f32
+
 
 
 
