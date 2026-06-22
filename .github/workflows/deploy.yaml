@@ -102,6 +102,17 @@ jobs:
       - name: Configure kubectl
         run: aws eks update-kubeconfig --region ${{ vars.AWS_REGION || 'us-east-1' }} --name shipzen-cluster
 
+      - name: Force cleanup cert-manager resources
+        run: |
+          echo "Removing finalizers from cert-manager resources..."
+          for crd in certificates.cert-manager.io clusterissuers.cert-manager.io challenges.acme.cert-manager.io orders.acme.cert-manager.io; do
+            kubectl get $crd -A -o name 2>/dev/null | xargs -I {} kubectl patch {} -p '{"metadata":{"finalizers":[]}}' --type=merge 2>/dev/null || true
+            kubectl delete $crd --all -A --wait=false 2>/dev/null || true
+          done
+          echo "Triggering ArgoCD sync..."
+          kubectl patch application shipzen-platform -n argocd -p '{"operation":{"sync":{"revision":"HEAD"}}}' --type=merge 2>/dev/null || true
+          sleep 10
+
 
       - name: Wait for Network Load Balancer
         run: |
