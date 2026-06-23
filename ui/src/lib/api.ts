@@ -8,6 +8,8 @@ let BASE = "http://localhost:8000";
 if (typeof window !== "undefined") {
   if (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1") {
     BASE = "http://localhost:8000";
+  } else if (window.location.hostname === "shipzen.jeneeldumasia.codes") {
+    BASE = "https://api-shipzen.jeneeldumasia.codes";
   } else {
     BASE = "https://api." + window.location.hostname;
   }
