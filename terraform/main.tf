@@ -191,7 +191,7 @@ module "irsa_builder" {
   oidc_providers = {
     main = {
       provider_arn               = module.eks.oidc_provider_arn
-      namespace_service_accounts = ["shipzen-build:shipzen-builder-sa", "shipzen-system:shipzen-worker-sa"]
+      namespace_service_accounts = ["shipzen-build:shipzen-builder-sa", "shipzen-system:shipzen-worker-sa", "shipzen-system:shipzen-api-sa"]
     }
   }
 }
@@ -206,7 +206,9 @@ resource "aws_iam_role_policy" "builder_ecr" {
       { Effect = "Allow", Action = ["ecr:BatchCheckLayerAvailability","ecr:PutImage",
         "ecr:InitiateLayerUpload","ecr:UploadLayerPart","ecr:CompleteLayerUpload",
         "ecr:DescribeImageScanFindings", "ecr:CreateRepository", "ecr:DescribeRepositories"],
-        Resource = [aws_ecr_repository.builds.arn, "${aws_ecr_repository.builds.arn}/*"] }
+        Resource = [aws_ecr_repository.builds.arn, "${aws_ecr_repository.builds.arn}/*"] },
+      { Effect = "Allow", Action = ["s3:PutObject", "s3:GetObject", "s3:ListBucket"],
+        Resource = [aws_s3_bucket.build_logs.arn, "${aws_s3_bucket.build_logs.arn}/*"] }
     ]
   })
 }
