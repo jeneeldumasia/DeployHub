@@ -9,7 +9,7 @@ if (typeof window !== "undefined") {
   if (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1") {
     BASE = "http://localhost:8000";
   } else if (window.location.hostname === "shipzen.jeneeldumasia.codes") {
-    BASE = "https://api-shipzen.jeneeldumasia.codes";
+    BASE = "https://shipzen.jeneeldumasia.codes/api/v1";
   } else {
     BASE = "https://api." + window.location.hostname;
   }
