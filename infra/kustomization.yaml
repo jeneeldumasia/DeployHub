@@ -71,7 +71,8 @@ images:
     newTag: sha-88e93b4
   - name: shipzen-ui
     newName: ghcr.io/jeneeldumasia/shipzen-ui
-    newTag: sha-6b467f0
+    newTag: sha-8cf4214
+
 
 
 
