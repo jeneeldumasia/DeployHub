@@ -47,7 +47,8 @@ images:
 
   - name: shipzen-worker
     newName: ghcr.io/jeneeldumasia/shipzen-worker
-    newTag: sha-a120a44
+    newTag: sha-59f6efd
+
 
 
 
