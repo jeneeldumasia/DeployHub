@@ -554,6 +554,60 @@ async def stream_logs(project_id: str, deployment_id: str, current_user: User = 
         headers={"Cache-Control": "no-cache", "Connection": "keep-alive"}
     )
 
+
+@app.websocket("/ws/projects/{project_id}/deployments/{deployment_id}/logs")
+async def websocket_deployment_logs(
+    websocket: WebSocket,
+    project_id: str,
+    deployment_id: str,
+    token: str = Query(None),
+):
+    """
+    WebSocket endpoint for live build log streaming.
+    Subscribes to the Redis Pub/Sub channel `shipzen:logs:{deployment_id}`
+    and forwards each line to the connected client as plain text.
+    Auth is passed via ?token= query param (same pattern as the status WS).
+    """
+    if not token:
+        await websocket.close(code=1008)
+        return
+    from auth import get_current_user_from_token
+    try:
+        user = get_current_user_from_token(token)
+    except Exception:
+        await websocket.close(code=1008)
+        return
+
+    # Verify the deployment belongs to this project
+    try:
+        import asyncio
+        def verify():
+            _get_project_or_404(project_id, user)
+            _get_deployment_or_404(project_id, deployment_id)
+        await asyncio.to_thread(verify)
+    except HTTPException:
+        await websocket.close(code=1008)
+        return
+
+    await websocket.accept()
+
+    import redis.asyncio as aioredis
+    r = aioredis.Redis(host=REDIS_HOST, port=REDIS_PORT, decode_responses=True)
+    pubsub = r.pubsub()
+    await pubsub.subscribe(f"shipzen:logs:{deployment_id}")
+
+    try:
+        async for message in pubsub.listen():
+            if message["type"] == "message":
+                await websocket.send_text(message["data"])
+    except WebSocketDisconnect:
+        logger.info(f"Log WS disconnected for {deployment_id}")
+    except Exception as e:
+        logger.error(f"Log WS error for {deployment_id}: {e}")
+    finally:
+        await pubsub.unsubscribe()
+        await r.aclose()
+
 # ── Builds ────────────────────────────────────────────────────────────────────
 
 @app.get("/projects/{project_id}/deployments/{deployment_id}/builds", tags=["Builds"])

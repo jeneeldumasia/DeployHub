@@ -6,6 +6,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { AutoRefresh } from "./AutoRefresh";
 import { RedeployButton } from "./RedeployButton";
 import { LogViewer } from "./LogViewer";
+import { LiveLogPanel } from "./LiveLogPanel";
 import { auth } from "@/auth";
 
 export const dynamic = "force-dynamic";
@@ -169,6 +170,17 @@ export default async function DeploymentPage({ params }: { params: { id: string;
         ))}
       </div>
 
+      {/* Live log panel — shown inline while build is active */}
+      {isActive && (
+        <div className="mb-6">
+          <LiveLogPanel
+            projectId={params.id}
+            deploymentId={params.depId}
+            token={token}
+          />
+        </div>
+      )}
+
       {/* Build history */}
       <div className="card overflow-hidden mb-6">
         <div className="px-6 py-4 border-b border-canvas-border">
@@ -196,7 +208,13 @@ export default async function DeploymentPage({ params }: { params: { id: string;
                   <td className="px-6 py-3 text-xs text-text-secondary">{b.completed_at ? new Date(b.completed_at).toLocaleString() : "—"}</td>
                   <td className="px-6 py-3">
                     {b.s3_log_uri ? (
-                      <LogViewer projectId={params.id} deploymentId={params.depId} buildId={b.build_id} />
+                      <LogViewer
+                        projectId={params.id}
+                        deploymentId={params.depId}
+                        buildId={b.build_id}
+                        deploymentState={deployment.state}
+                        token={token}
+                      />
                     ) : (
                       <span className="text-xs text-text-secondary">—</span>
                     )}
