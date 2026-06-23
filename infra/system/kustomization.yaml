@@ -3,6 +3,7 @@ kind: Kustomization
 
 resources:
   - namespace.yaml
+  - build-namespace.yaml
   - schema-configmap.yaml
   - schema-job.yaml
   - servicemonitors.yaml
@@ -11,5 +12,6 @@ resources:
   - gateway.yaml
   - grafana-route.yaml
   - kyverno-exception.yaml
+  - build-namespace-exception.yaml
   - grafana-dashboards.yaml
   - ecr-token-rotator.yaml

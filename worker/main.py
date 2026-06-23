@@ -273,7 +273,11 @@ def process_message(queue: QueueClient, state_machine: StateMachine, message_id:
         job_name = manifest["metadata"]["name"]
         
         # Create Job
-        batch_v1.create_namespaced_job(namespace="shipzen-build", body=manifest)
+        try:
+            batch_v1.create_namespaced_job(namespace="shipzen-build", body=manifest)
+        except ApiException as e:
+            raise Exception(f"Kubernetes Job creation failed (HTTP {e.status}): {e.reason}. "
+                            f"Ensure the 'shipzen-build' namespace exists and the worker ServiceAccount has batch/jobs create permission.")
         logger.info(f"Created Job {job_name} for deployment {deployment_id}")
         
         # Spawn thread to monitor Job
@@ -284,7 +288,9 @@ def process_message(queue: QueueClient, state_machine: StateMachine, message_id:
 
     except Exception as e:
         logger.error(f"Error processing {deployment_id}: {e}")
-        state_machine.update_state(deployment_id, DeploymentState.RETRY, error_msg=str(e))
+        # Persist the actual error so the UI can display it rather than the
+        # generic "Build step failed." message
+        state_machine.update_state(deployment_id, "Failed", str(e))
         queue.add_to_dlq(message_id, data)
 
 
