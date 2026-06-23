@@ -14,15 +14,9 @@ export function LogViewer({ projectId, deploymentId, buildId }: { projectId: str
     if (open) {
       setLoading(true);
       setLogs("");
-      // Fetch the presigned URL
+      // api.builds.logs now returns plain text, proxied through the API.
+      // This avoids S3 CORS restrictions entirely.
       api.builds.logs(projectId, deploymentId, buildId)
-        .then(data => {
-          if (data.url) {
-            return fetch(data.url);
-          }
-          throw new Error("No URL returned");
-        })
-        .then(res => res.text())
         .then(text => {
           // Strip ANSI escape codes
           const cleanText = text.replace(/[\u001b\u009b][[()#;?]*(?:[0-9]{1,4}(?:;[0-9]{0,4})*)?[0-9A-ORZcf-nqry=><]/g, '');

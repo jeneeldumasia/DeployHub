@@ -17,7 +17,7 @@ import psycopg2
 from psycopg2.extras import DictCursor
 from fastapi import FastAPI, HTTPException, Query, Depends, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import JSONResponse, StreamingResponse, Response
 import json
 from pydantic import BaseModel, field_validator
 import boto3
@@ -583,7 +583,7 @@ def list_builds(request: Request, project_id: str, deployment_id: str, current_u
 @app.get("/projects/{project_id}/deployments/{deployment_id}/builds/{build_id}/logs", tags=["Builds"])
 @limiter.limit("100/minute")
 def get_build_logs(request: Request, project_id: str, deployment_id: str, build_id: str, current_user: User = Depends(get_current_user)):
-    """Generate a presigned S3 URL for downloading build logs."""
+    """Stream build log content directly, proxied through the API to avoid S3 CORS issues."""
     _get_project_or_404(project_id, current_user)
     _get_deployment_or_404(project_id, deployment_id)
 
@@ -601,21 +601,29 @@ def get_build_logs(request: Request, project_id: str, deployment_id: str, build_
                 s3_uri = row["s3_log_uri"]
                 if not s3_uri.startswith("s3://"):
                     raise HTTPException(status_code=400, detail="Invalid log URI")
-                    
+
                 bucket = s3_uri.split("/")[2]
                 key = "/".join(s3_uri.split("/")[3:])
-                
+
+                if not bucket:
+                    raise HTTPException(status_code=404, detail="Log storage not configured")
+
                 s3 = boto3.client('s3')
-                url = s3.generate_presigned_url(
-                    'get_object',
-                    Params={'Bucket': bucket, 'Key': key},
-                    ExpiresIn=900
+                try:
+                    obj = s3.get_object(Bucket=bucket, Key=key)
+                except s3.exceptions.NoSuchKey:
+                    raise HTTPException(status_code=404, detail="Log file not found in S3")
+
+                content = obj['Body'].read()
+                return Response(
+                    content=content,
+                    media_type="text/plain",
+                    headers={"Content-Disposition": f"inline; filename=build-{build_id[:8]}.log"}
                 )
-                return {"url": url}
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Failed to generate presigned URL: {e}")
+        logger.error(f"Failed to fetch build log: {e}")
         raise HTTPException(status_code=500, detail="Failed to get logs")
 
 # ── Audit ─────────────────────────────────────────────────────────────────────

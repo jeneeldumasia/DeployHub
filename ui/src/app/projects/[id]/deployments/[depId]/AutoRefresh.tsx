@@ -18,9 +18,15 @@ export function AutoRefresh({ projectId, deploymentId, token }: { projectId: str
     let ws: WebSocket;
     let reconnectTimer: NodeJS.Timeout;
     let isUnmounted = false;
+    // Track whether we've received a terminal state so we stop reconnecting
+    let done = false;
+
+    const TERMINAL_STATES = new Set(["Running", "Failed", "DLQ"]);
 
     const connect = () => {
-      const wsUrl = process.env.NEXT_PUBLIC_API_URL?.replace("http", "ws") || "ws://localhost:8000";
+      if (done || isUnmounted) return;
+
+      const wsUrl = process.env.NEXT_PUBLIC_API_URL?.replace(/^http/, "ws") ?? "ws://localhost:8000";
       ws = new WebSocket(`${wsUrl}/ws/projects/${projectId}/deployments/${deploymentId}/status?token=${token}`);
 
       ws.onmessage = (event) => {
@@ -28,15 +34,26 @@ export function AutoRefresh({ projectId, deploymentId, token }: { projectId: str
           const data = JSON.parse(event.data);
           if (data.state && data.state !== lastState.current) {
             lastState.current = data.state;
+            // Refresh the server component to pick up the new DB state
             router.refresh();
+
+            if (TERMINAL_STATES.has(data.state)) {
+              // Reached a terminal state — no need to keep the socket open.
+              done = true;
+              ws?.close();
+            }
           }
         } catch (e) {
           console.error("Failed to parse websocket message", e);
         }
       };
 
+      ws.onerror = () => {
+        // Let onclose handle reconnect
+      };
+
       ws.onclose = () => {
-        if (!isUnmounted) {
+        if (!isUnmounted && !done) {
           // Cloudflare drops idle WS after 100s. Reconnect automatically.
           reconnectTimer = setTimeout(connect, 3000);
         }
@@ -47,10 +64,9 @@ export function AutoRefresh({ projectId, deploymentId, token }: { projectId: str
 
     return () => {
       isUnmounted = true;
+      done = true;
       clearTimeout(reconnectTimer);
-      if (ws) {
-        ws.close();
-      }
+      ws?.close();
     };
   }, [router, projectId, deploymentId, token]);
 

@@ -140,10 +140,27 @@ export const api = {
       request<Build[]>(
         `/projects/${projectId}/deployments/${deploymentId}/builds`
       ),
-    logs: (projectId: string, deploymentId: string, buildId: string) =>
-      request<{ url: string }>(
-        `/projects/${projectId}/deployments/${deploymentId}/builds/${buildId}/logs`
-      ),
+    logs: async (projectId: string, deploymentId: string, buildId: string): Promise<string> => {
+      // Logs endpoint now streams plain text directly — no presigned URL needed.
+      let token: string | undefined;
+      if (typeof window === "undefined") {
+        const { auth } = await import("@/auth");
+        const session = await auth();
+        token = (session as any)?.accessToken;
+      } else {
+        const { getSession } = await import("next-auth/react");
+        const session = await getSession();
+        token = (session as any)?.accessToken;
+      }
+      const headers: Record<string, string> = {};
+      if (token) headers["Authorization"] = `Bearer ${token}`;
+      const res = await fetch(
+        `${BASE}/projects/${projectId}/deployments/${deploymentId}/builds/${buildId}/logs`,
+        { headers }
+      );
+      if (!res.ok) throw new Error(`Server returned ${res.status}`);
+      return res.text();
+    },
   },
 
   audit: {

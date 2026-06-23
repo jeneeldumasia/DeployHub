@@ -84,12 +84,14 @@ export default async function DeploymentPage({ params }: { params: { id: string;
   const auditList = auditLogs.status  === "fulfilled" ? auditLogs.value  : [];
 
   const isActive = ["Queued", "Building", "Deploying", "Verifying"].includes(deployment.state);
+  // Also watch states that just transitioned to terminal — the WS handles cleanup internally
+  const needsLiveUpdates = isActive;
   const shortId  = deployment.deployment_id.slice(0, 8);
   const imageTag = deployment.image_uri?.split(":").pop()?.slice(0, 8) ?? "—";
 
   return (
     <div>
-      {isActive && <AutoRefresh projectId={params.id} deploymentId={params.depId} token={token} />}
+      {needsLiveUpdates && <AutoRefresh projectId={params.id} deploymentId={params.depId} token={token} />}
 
       <Link href={`/projects/${params.id}`} className="inline-flex items-center gap-1.5 text-sm text-text-secondary hover:text-gray-700 mb-6 group">
         <ArrowLeft size={14} className="group-hover:-translate-x-0.5 transition-transform" />

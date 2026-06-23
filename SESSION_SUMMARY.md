@@ -91,3 +91,6 @@ We will execute the `task.md` created this session:
 1. **Worker Pod Identity**: Patch infra/worker/deployment.yaml with explicit projected volume and AWS_ROLE_ARN for shipzen-worker so it can upload logs to S3.
 2. Verify Kaniko builds succeed and stream logs correctly.
 - Upgraded the Auto-Destroy Deadman Switch (.github/workflows/auto-destroy.yaml) to run hourly, enforcing a 6-hour max cluster uptime limit. Added failsafe logic to detect lingering VPCs (partial destroy state) even if the EKS cluster is gone, to prevent leaked resources (like NAT Gateways) from consuming credits.
+
+## Lessons Learned (June 24)
+- **Troubleshooting Priority:** When debugging Kubernetes deployment or job failures, **ALWAYS check the cluster events first** (`kubectl get events`, `kubectl describe pod/job`) before diving into application code or IAM permissions. Do not get tunnel vision on symptoms (like UI WebSockets timing out or logs failing to load) without first verifying the root cause of the failure at the infrastructure/control plane level. In this case, missing the fact that the `shipzen-build` namespace didn't exist/was blocked by Kyverno led to hours of wasted debugging on secondary issues.
