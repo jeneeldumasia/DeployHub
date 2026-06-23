@@ -9,6 +9,8 @@ from kubernetes import client, config as k8s_config
 from kubernetes.client.rest import ApiException
 from kubernetes.utils import create_from_yaml
 import boto3
+import redis
+import json
 from models import ProjectStatus, ProjectSchema
 from metrics import (
     shipzen_drift_total, 
@@ -301,6 +303,11 @@ def reconcile_deployments(conn, cur, project):
                             ('Failed', 'Kubernetes Deployment Failed/CrashLoopBackOff', d_id)
                         )
                         conn.commit()
+                        try:
+                            r = redis.Redis(host=os.getenv("REDIS_HOST", "redis-master.shipzen-system.svc.cluster.local"), port=6379)
+                            r.publish(f"shipzen:status:{d_id}", json.dumps({"state": "Failed", "last_error": "Kubernetes Deployment Failed/CrashLoopBackOff"}))
+                        except Exception as pub_e:
+                            logger.warning(f"Failed to publish to Redis: {pub_e}")
                     elif ready_replicas > 0 and db_dep['state'] in ['Deploying', 'Verifying']:
                         logger.info(f"Deployment {d_id} is now Running (Ready Replicas: {ready_replicas})")
                         cur.execute(
@@ -309,6 +316,11 @@ def reconcile_deployments(conn, cur, project):
                         )
                         conn.commit()
                         shipzen_deployment_success_total.inc()
+                        try:
+                            r = redis.Redis(host=os.getenv("REDIS_HOST", "redis-master.shipzen-system.svc.cluster.local"), port=6379)
+                            r.publish(f"shipzen:status:{d_id}", json.dumps({"state": "Running", "last_error": None}))
+                        except Exception as pub_e:
+                            logger.warning(f"Failed to publish to Redis: {pub_e}")
 
         # 2. Orphan Resources Cleanup
         for k8s_name in k8s_dep_names.keys():
