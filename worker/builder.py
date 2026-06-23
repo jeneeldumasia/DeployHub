@@ -2,6 +2,7 @@ import os
 import json
 import base64
 import boto3
+import logging
 
 def get_ecr_credentials():
     try:
