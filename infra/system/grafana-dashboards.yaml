@@ -11,11 +11,11 @@ data:
       "uid": "platform-health",
       "title": "Platform Health",
       "panels": [
-        {"title": "Queue Depth", "type": "timeseries", "targets": [{"expr": "shipzen_queue_depth"}]},
-        {"title": "DLQ Depth", "type": "timeseries", "targets": [{"expr": "shipzen_dlq_depth"}]},
-        {"title": "Retry Rate (5m)", "type": "timeseries", "targets": [{"expr": "rate(shipzen_retry_total[5m])"}]},
-        {"title": "Reconciliation Duration", "type": "timeseries", "targets": [{"expr": "shipzen_reconciliation_duration_seconds"}]},
-        {"title": "Drift Events (5m)", "type": "timeseries", "targets": [{"expr": "rate(shipzen_drift_total[5m])"}]}
+        {"title": "Queue Depth", "type": "timeseries", "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0}, "targets": [{"expr": "shipzen_queue_depth"}]},
+        {"title": "DLQ Depth", "type": "timeseries", "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0}, "targets": [{"expr": "shipzen_dlq_depth"}]},
+        {"title": "Retry Rate (5m)", "type": "timeseries", "gridPos": {"h": 8, "w": 8, "x": 0, "y": 8}, "targets": [{"expr": "rate(shipzen_retry_total[5m])"}]},
+        {"title": "Reconciliation Duration", "type": "timeseries", "gridPos": {"h": 8, "w": 8, "x": 8, "y": 8}, "targets": [{"expr": "shipzen_reconciliation_duration_seconds"}]},
+        {"title": "Drift Events (5m)", "type": "timeseries", "gridPos": {"h": 8, "w": 8, "x": 16, "y": 8}, "targets": [{"expr": "rate(shipzen_drift_total[5m])"}]}
       ]
     }
   build-performance.json: |-
@@ -304,9 +304,9 @@ data:
       "uid": "project-resources",
       "title": "Per-Project Resource Usage",
       "panels": [
-        {"title": "CPU Usage by Namespace", "type": "timeseries", "targets": [{"expr": "sum(rate(container_cpu_usage_seconds_total{namespace=~\"tenant-.*\"}[5m])) by (namespace)"}]},
-        {"title": "Memory by Namespace", "type": "timeseries", "targets": [{"expr": "sum(container_memory_working_set_bytes{namespace=~\"tenant-.*\"}) by (namespace)"}]},
-        {"title": "Quota Saturation", "type": "timeseries", "targets": [{"expr": "kube_resourcequota{type=\"used\", namespace=~\"tenant-.*\"} / kube_resourcequota{type=\"hard\", namespace=~\"tenant-.*\"}"}]}
+        {"title": "CPU Usage by Namespace", "type": "timeseries", "gridPos": {"h": 9, "w": 12, "x": 0, "y": 0}, "targets": [{"expr": "sum(rate(container_cpu_usage_seconds_total{namespace=~\"tenant-.*\"}[5m])) by (namespace)"}]},
+        {"title": "Memory by Namespace", "type": "timeseries", "gridPos": {"h": 9, "w": 12, "x": 12, "y": 0}, "targets": [{"expr": "sum(container_memory_working_set_bytes{namespace=~\"tenant-.*\"}) by (namespace)"}]},
+        {"title": "Quota Saturation", "type": "timeseries", "gridPos": {"h": 8, "w": 24, "x": 0, "y": 9}, "targets": [{"expr": "kube_resourcequota{type=\"used\", namespace=~\"tenant-.*\"} / kube_resourcequota{type=\"hard\", namespace=~\"tenant-.*\"}"}]}
       ]
     }
   pod-health.json: |-
@@ -320,9 +320,9 @@ data:
         ]
       },
       "panels": [
-        {"title": "Pod Ready Status", "type": "stat", "targets": [{"expr": "kube_pod_status_ready{namespace=\"$namespace\", pod=~\"$deployment-.*\", condition=\"true\"}"}]},
-        {"title": "Restart Count", "type": "timeseries", "targets": [{"expr": "kube_pod_container_status_restarts_total{namespace=\"$namespace\", pod=~\"$deployment-.*\"}"}]},
-        {"title": "CPU Usage", "type": "timeseries", "targets": [{"expr": "sum(rate(container_cpu_usage_seconds_total{namespace=\"$namespace\", pod=~\"$deployment-.*\"}[5m])) by (pod)"}]},
-        {"title": "Memory Usage", "type": "timeseries", "targets": [{"expr": "sum(container_memory_working_set_bytes{namespace=\"$namespace\", pod=~\"$deployment-.*\"}) by (pod)"}]}
+        {"title": "Pod Ready Status", "type": "stat", "gridPos": {"h": 6, "w": 6, "x": 0, "y": 0}, "targets": [{"expr": "kube_pod_status_ready{namespace=\"$namespace\", pod=~\"$deployment-.*\", condition=\"true\"}"}]},
+        {"title": "Restart Count", "type": "timeseries", "gridPos": {"h": 6, "w": 18, "x": 6, "y": 0}, "targets": [{"expr": "kube_pod_container_status_restarts_total{namespace=\"$namespace\", pod=~\"$deployment-.*\"}"}]},
+        {"title": "CPU Usage", "type": "timeseries", "gridPos": {"h": 9, "w": 12, "x": 0, "y": 6}, "targets": [{"expr": "sum(rate(container_cpu_usage_seconds_total{namespace=\"$namespace\", pod=~\"$deployment-.*\"}[5m])) by (pod)"}]},
+        {"title": "Memory Usage", "type": "timeseries", "gridPos": {"h": 9, "w": 12, "x": 12, "y": 6}, "targets": [{"expr": "sum(container_memory_working_set_bytes{namespace=\"$namespace\", pod=~\"$deployment-.*\"}) by (pod)"}]}
       ]
     }
