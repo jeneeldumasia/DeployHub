@@ -38,6 +38,31 @@ resource "helm_release" "kube_prometheus_stack" {
     value = "false"
   }
 
+  set {
+    name  = "grafana.grafana\\.ini.database.type"
+    value = "postgres"
+  }
+
+  set {
+    name  = "grafana.grafana\\.ini.database.host"
+    value = "postgres-postgresql.shipzen-system.svc.cluster.local:5432"
+  }
+
+  set {
+    name  = "grafana.grafana\\.ini.database.name"
+    value = "grafana"
+  }
+
+  set {
+    name  = "grafana.grafana\\.ini.database.user"
+    value = "grafana"
+  }
+
+  set {
+    name  = "grafana.grafana\\.ini.database.password"
+    value = "grafana123!"
+  }
+
   # Grafana admin password — change before exposing externally
   set {
     name  = "grafana.adminPassword"
