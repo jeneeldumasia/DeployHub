@@ -72,6 +72,7 @@ spec:
           envFrom:
             - secretRef:
                 name: {{ deployment_name }}-secrets-sync
+                optional: true
           ports:
             - name: http
               containerPort: {{ port | default(8080) }}
