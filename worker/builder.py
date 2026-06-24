@@ -71,7 +71,7 @@ class DockerfileBuilder(Builder):
             },
             "spec": {
                 "backoffLimit": 0,
-                "activeDeadlineSeconds": 900,  # 15 mins
+                "activeDeadlineSeconds": 1800,  # 30 mins
                 "template": {
                     "metadata": {
                         "annotations": {
@@ -206,7 +206,7 @@ fi
         if overrides.get("bp_node_run_scripts"):
             env_vars.append({"name": "BP_NODE_RUN_SCRIPTS", "value": overrides.get("bp_node_run_scripts")})
             
-        pack_args = ["pack", "build", image_uri, "--path", "/workspace", "--builder", "paketobuildpacks/builder-jammy-base", "--publish"]
+        pack_args = ["pack", "build", image_uri, "--path", "/workspace", "--builder", "paketobuildpacks/builder-jammy-base", "--publish", "--env", "NODE_OPTIONS=--max-old-space-size=2048"]
         if overrides.get("runtime"):
             pack_args.extend(["--buildpack", overrides.get("runtime")])
 
@@ -223,7 +223,7 @@ fi
             },
             "spec": {
                 "backoffLimit": 0,
-                "activeDeadlineSeconds": 900,
+                "activeDeadlineSeconds": 1800,
                 "template": {
                     "spec": {
                         "restartPolicy": "Never",
