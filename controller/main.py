@@ -268,7 +268,7 @@ def reconcile():
 def reconcile_deployments(conn, cur, project):
     """Reconciles Deployments, Services, and HTTPRoutes for a ready project namespace."""
     cur.execute("SELECT * FROM deployments WHERE project_id = %s;", (project.id,))
-    db_deployments = {row['deployment_id']: dict(row) for row in cur.fetchall()}
+    db_deployments = {str(row['deployment_id']): dict(row) for row in cur.fetchall()}
 
     try:
         k8s_deps = k8s_apps_api.list_namespaced_deployment(namespace=project.namespace)
