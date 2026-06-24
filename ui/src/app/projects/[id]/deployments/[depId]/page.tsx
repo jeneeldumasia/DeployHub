@@ -70,7 +70,11 @@ function Pipeline({ state, builds }: { state: string, builds: any[] }) {
 
 export default async function DeploymentPage({ params }: { params: { id: string; depId: string } }) {
   let deployment;
-  try { deployment = await api.deployments.get(params.id, params.depId); }
+  let project;
+  try { 
+    deployment = await api.deployments.get(params.id, params.depId); 
+    project = await api.projects.get(params.id);
+  }
   catch { notFound(); }
 
   const session = await auth();
@@ -113,13 +117,13 @@ export default async function DeploymentPage({ params }: { params: { id: string;
             )}
             {deployment.state === "Running" && (
               <a 
-                href={`http://${shortId}.${params.id || "app"}.${process.env.NEXT_PUBLIC_APP_DOMAIN}`} 
+                href={`http://${shortId}-${project.name}-${process.env.NEXT_PUBLIC_APP_DOMAIN}`} 
                 target="_blank" 
                 rel="noopener noreferrer"
                 className="flex items-center gap-1.5 text-xs bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 px-2 py-0.5 rounded font-medium hover:bg-emerald-500/20 transition-colors"
               >
                 <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                Live: {shortId}.{params.id || "app"}.{process.env.NEXT_PUBLIC_APP_DOMAIN}
+                Live: {shortId}-{project.name}-{process.env.NEXT_PUBLIC_APP_DOMAIN}
               </a>
             )}
           </div>
