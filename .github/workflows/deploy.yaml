@@ -79,12 +79,16 @@ jobs:
         working-directory: ./terraform
         env:
           TF_VAR_cloudflare_api_token: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          TF_VAR_grafana_db_password: ${{ secrets.GRAFANA_DB_PASSWORD }}
+          TF_VAR_grafana_password: ${{ secrets.GRAFANA_PASSWORD }}
         run: terraform plan -out=tfplan
 
       - name: Terraform Apply
         working-directory: ./terraform
         env:
           TF_VAR_cloudflare_api_token: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          TF_VAR_grafana_db_password: ${{ secrets.GRAFANA_DB_PASSWORD }}
+          TF_VAR_grafana_password: ${{ secrets.GRAFANA_PASSWORD }}
         run: terraform apply tfplan
 
       - name: Configure kubectl

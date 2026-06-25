@@ -18,6 +18,13 @@ variable "grafana_password" {
   sensitive   = true
 }
 
+variable "grafana_db_password" {
+  description = "Grafana database password. If empty, a default is used."
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
 variable "cloudflare_api_token" {
   description = "Cloudflare API token for DNS-01 challenge (cert-manager). Must have Zone:DNS:Edit permission."
   type        = string
