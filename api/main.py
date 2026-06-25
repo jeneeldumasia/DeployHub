@@ -443,7 +443,7 @@ def rollback_deployment(request: Request, project_id: str, current_user: User = 
         resource_id=deployment_id,
         details={"from_image": last_good['image_uri']},
     )
-    return {"message": "Rollback queued", "deployment_id": deployment_id, "status": "Deploying"}
+    return {"message": "Rollback queued", "deployment_id": deployment_id, "status": "Queued"}
 
 
 @app.get("/projects/{project_id}/deployments", tags=["Deployments"])
