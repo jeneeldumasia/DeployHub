@@ -50,17 +50,17 @@ resource "helm_release" "kube_prometheus_stack" {
 
   set {
     name  = "grafana.grafana\\.ini.database.name"
-    value = "grafana"
+    value = "shipzen"
   }
 
   set {
     name  = "grafana.grafana\\.ini.database.user"
-    value = "grafana"
+    value = "shipzen"
   }
 
   set {
     name  = "grafana.grafana\\.ini.database.password"
-    value = var.grafana_db_password != "" ? var.grafana_db_password : "shipzen-grafana-db"
+    value = var.pg_password != "" ? var.pg_password : "shipzen-secret-change-me"
   }
 
   set {
