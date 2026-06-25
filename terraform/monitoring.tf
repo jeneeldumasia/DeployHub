@@ -117,5 +117,6 @@ resource "helm_release" "kube_prometheus_stack" {
     value = "true"
   }
 
-  depends_on = [time_sleep.wait_for_cluster_auth, time_sleep.wait_for_alb_webhook]
+  timeout = 900
+  depends_on = [time_sleep.wait_for_cluster_auth, time_sleep.wait_for_alb_webhook, helm_release.postgresql]
 }
