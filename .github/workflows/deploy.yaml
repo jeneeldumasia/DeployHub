@@ -83,16 +83,24 @@ jobs:
           TF_VAR_grafana_password: ${{ secrets.GRAFANA_PASSWORD }}
         run: terraform plan -out=tfplan
 
+      - name: Configure kubectl
+        run: aws eks update-kubeconfig --region ${{ vars.AWS_REGION || 'us-east-1' }} --name shipzen-cluster
+        continue-on-error: true
+
       - name: Terraform Apply
         working-directory: ./terraform
         env:
           TF_VAR_cloudflare_api_token: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           TF_VAR_pg_password: ${{ secrets.PG_PASSWORD }}
           TF_VAR_grafana_password: ${{ secrets.GRAFANA_PASSWORD }}
-        run: terraform apply tfplan
-
-      - name: Configure kubectl
-        run: aws eks update-kubeconfig --region ${{ vars.AWS_REGION || 'us-east-1' }} --name shipzen-cluster
+        run: |
+          if ! terraform apply -auto-approve tfplan; then
+            echo "::error::Terraform Apply failed! Dumping observability cluster state for debugging..."
+            kubectl get pods -n observability || true
+            kubectl describe pods -n observability || true
+            kubectl get events -n observability || true
+            exit 1
+          fi
 
       - name: Force cleanup cert-manager resources
         run: |
