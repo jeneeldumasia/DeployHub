@@ -4,6 +4,16 @@
 # PrometheusRule and ServiceMonitor CRDs are installed by this chart,
 # which activates all resources in observability/.
 
+resource "null_resource" "apply_node_exporter_exception" {
+  triggers = {
+    always_run = timestamp()
+  }
+  provisioner "local-exec" {
+    command = "aws eks update-kubeconfig --region ${var.aws_region} --name shipzen-cluster && kubectl apply -f ../infra/system/kyverno-exception.yaml"
+  }
+  depends_on = [time_sleep.wait_for_cluster_auth, helm_release.kyverno]
+}
+
 resource "helm_release" "kube_prometheus_stack" {
   name             = "kube-prometheus-stack"
   repository       = "https://prometheus-community.github.io/helm-charts"
@@ -120,5 +130,5 @@ resource "helm_release" "kube_prometheus_stack" {
   }
 
   timeout = 900
-  depends_on = [time_sleep.wait_for_cluster_auth, time_sleep.wait_for_alb_webhook, helm_release.postgresql]
+  depends_on = [time_sleep.wait_for_cluster_auth, time_sleep.wait_for_alb_webhook, helm_release.postgresql, null_resource.apply_node_exporter_exception]
 }
