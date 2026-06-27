@@ -32,3 +32,16 @@ shipzen_deployment_failure_total = Counter(
     'shipzen_deployment_failure_total',
     'Total deployments that ended in Failed or DLQ state'
 )
+
+shipzen_deployments_total = Counter(
+    'shipzen_deployments_total',
+    'Total deployments processed by the worker',
+    ['state', 'project_id']
+)
+
+shipzen_build_duration_seconds = Histogram(
+    'shipzen_build_duration_seconds',
+    'Time taken for the build Job to complete',
+    ['project_id', 'builder_type'],
+    buckets=(10.0, 30.0, 60.0, 120.0, 300.0, 600.0, 1200.0)
+)

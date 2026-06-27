@@ -19,6 +19,14 @@ shipzen_deployment_success_total = Counter(
     'Total number of successful deployments transitioned to Running'
 )
 
+from prometheus_client import Gauge
+
+shipzen_active_deployments = Gauge(
+    'shipzen_active_deployments',
+    'Current number of running deployments',
+    ['namespace']
+)
+
 def start_metrics_server(port: int = 9090):
     # Fix: was 8080, which collides with the controller's own app port.
     # Metrics now bind on 9090.

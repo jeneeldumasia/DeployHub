@@ -11,11 +11,12 @@ data:
       "uid": "platform-health",
       "title": "Platform Health",
       "panels": [
-        {"title": "Queue Depth", "type": "timeseries", "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0}, "targets": [{"expr": "shipzen_queue_depth"}]},
-        {"title": "DLQ Depth", "type": "timeseries", "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0}, "targets": [{"expr": "shipzen_dlq_depth"}]},
-        {"title": "Retry Rate (5m)", "type": "timeseries", "gridPos": {"h": 8, "w": 8, "x": 0, "y": 8}, "targets": [{"expr": "rate(shipzen_retry_total[5m])"}], "fieldConfig": {"defaults": {"unit": "ops"}}},
-        {"title": "Reconciliation Duration", "type": "timeseries", "gridPos": {"h": 8, "w": 8, "x": 8, "y": 8}, "targets": [{"expr": "shipzen_reconciliation_duration_seconds"}], "fieldConfig": {"defaults": {"unit": "s"}}},
-        {"title": "Drift Events (5m)", "type": "timeseries", "gridPos": {"h": 8, "w": 8, "x": 16, "y": 8}, "targets": [{"expr": "rate(shipzen_drift_total[5m])"}]}
+        {"title": "Deployment Throughput", "type": "timeseries", "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0}, "targets": [{"expr": "sum(rate(shipzen_deployments_total[5m])) by (state)"}]},
+        {"title": "Build Duration p95", "type": "timeseries", "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0}, "targets": [{"expr": "histogram_quantile(0.95, sum by(le) (rate(shipzen_build_duration_seconds_bucket[5m])))"}]},
+        {"title": "Queue Depth (In-Flight)", "type": "timeseries", "gridPos": {"h": 8, "w": 8, "x": 0, "y": 8}, "targets": [{"expr": "shipzen_messages_in_flight"}]},
+        {"title": "Queue Depth (DLQ)", "type": "timeseries", "gridPos": {"h": 8, "w": 8, "x": 8, "y": 8}, "targets": [{"expr": "shipzen_dlq_depth"}]},
+        {"title": "Active Deployments", "type": "timeseries", "gridPos": {"h": 8, "w": 8, "x": 16, "y": 8}, "targets": [{"expr": "sum by (namespace) (shipzen_active_deployments)"}]},
+        {"title": "Failure Rate", "type": "timeseries", "gridPos": {"h": 8, "w": 12, "x": 0, "y": 16}, "targets": [{"expr": "sum(rate(shipzen_deployments_total{state=\"failed\"}[5m]))"}]}
       ]
     }
   build-performance.json: |-

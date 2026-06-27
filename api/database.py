@@ -13,6 +13,8 @@ if not DATABASE_URL:
 
 
 from psycopg2.pool import ThreadedConnectionPool
+from fastapi import Depends, HTTPException
+from auth import get_current_user, User
 
 db_pool = ThreadedConnectionPool(1, 20, dsn=DATABASE_URL)
 
@@ -160,3 +162,29 @@ def init_db():
             conn.close()
     except Exception as e:
         logger.error(f"Failed to read/initialize database schema: {e}")
+
+async def verify_project_access(
+    project_id: str,
+    current_user: User = Depends(get_current_user)
+) -> dict:
+    conn = get_connection()
+    try:
+        with conn.cursor(cursor_factory=DictCursor) as cur:
+            if current_user.role == 'admin':
+                cur.execute("SELECT * FROM projects WHERE id = %s AND deleted_at IS NULL", (project_id,))
+                project = cur.fetchone()
+                if not project:
+                    raise HTTPException(status_code=404, detail="Project not found")
+                return dict(project)
+            else:
+                cur.execute("""
+                    SELECT p.* FROM projects p
+                    JOIN project_members pm ON pm.project_id = p.id
+                    WHERE p.id = %s AND pm.user_id = %s AND p.deleted_at IS NULL;
+                """, (project_id, current_user.user_id))
+                project = cur.fetchone()
+                if not project:
+                    raise HTTPException(status_code=403, detail="You do not have access to this project")
+                return dict(project)
+    finally:
+        conn.close()

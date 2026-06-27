@@ -22,7 +22,8 @@ from metrics import (
     start_metrics_server, 
     shipzen_retry_total, 
     shipzen_queue_latency_seconds,
-    shipzen_deployment_failure_total
+    shipzen_deployment_failure_total,
+    shipzen_build_duration_seconds
 )
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -63,11 +64,12 @@ def record_build(deployment_id: str, s3_key: str, status: str):
     except Exception as e:
         logger.error(f"Failed to record build for {deployment_id}: {e}")
 
-def monitor_job(job_name: str, deployment_id: str, image_name: str, state_machine: StateMachine):
+def monitor_job(job_name: str, deployment_id: str, image_name: str, state_machine: StateMachine, builder_type: str = "unknown", project_id: str = "unknown"):
     """Monitors the Kubernetes Job, streams logs to Redis, and finalizes the deployment."""
     logger.info(f"Monitoring Job {job_name} for deployment {deployment_id}")
     r = redis.Redis(host=config.REDIS_HOST, port=config.REDIS_PORT)
     s3_log_key = f"logs/{deployment_id}/build.log"
+    build_start_time = time.time()
     
     try:
         w = watch.Watch()
@@ -128,6 +130,10 @@ def monitor_job(job_name: str, deployment_id: str, image_name: str, state_machin
                 s3.upload_fileobj(io.BytesIO(stdout_bytes), S3_LOG_BUCKET, s3_log_key)
         except Exception as e:
             logger.error(f"S3 upload failed: {e}")
+
+        # Observe build duration
+        build_duration = time.time() - build_start_time
+        shipzen_build_duration_seconds.labels(project_id=project_id, builder_type=builder_type).observe(build_duration)
 
         if job_succeeded:
             logger.info(f"Build {deployment_id} successful. Checking port/ECR...")
@@ -309,7 +315,9 @@ def process_message(queue: QueueClient, state_machine: StateMachine, message_id:
         logger.info(f"Created Job {job_name} for deployment {deployment_id}")
         
         # Spawn thread to monitor Job
-        t = threading.Thread(target=monitor_job, args=(job_name, deployment_id, image_name, state_machine))
+        builder_type = selected_builder.name if hasattr(selected_builder, 'name') else type(selected_builder).__name__
+        project_id_db = deployment.get("project_id", "unknown") if deployment else "unknown"
+        t = threading.Thread(target=monitor_job, args=(job_name, deployment_id, image_name, state_machine, builder_type, project_id_db))
         t.start()
         
         queue.ack_message(message_id)

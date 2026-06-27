@@ -29,7 +29,7 @@ from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 from fastapi import Request
 
-from database import get_connection, init_db
+from database import get_connection, init_db, verify_project_access
 from contextlib import asynccontextmanager
 from audit import log_audit_event
 from auth import get_current_user, User
@@ -182,6 +182,12 @@ def create_project(request: Request, body: CreateProjectRequest, current_user: U
                     (project_id, current_user.user_id, body.name, body.namespace, webhook_secret),
                 )
                 project = dict(cur.fetchone())
+                
+                cur.execute(
+                    "INSERT INTO project_members (project_id, user_id, role) VALUES (%s, %s, 'owner')",
+                    (project_id, current_user.user_id)
+                )
+                
             conn.commit()
     except psycopg2.errors.UniqueViolation:
         raise HTTPException(status_code=409, detail="A project with this ID already exists")
@@ -224,21 +230,19 @@ def list_projects(request: Request, current_user: User = Depends(get_current_use
 
 @app.get("/projects/{project_id}", tags=["Projects"])
 @limiter.limit("100/minute")
-def get_project(request: Request, project_id: str, current_user: User = Depends(get_current_user)):
+def get_project(request: Request, project_id: str, project: dict = Depends(verify_project_access)):
     """Get a single project by ID."""
-    project = _get_project_or_404(project_id, current_user)
     return _serialize(project)
 
 
 @app.delete("/projects/{project_id}", status_code=202, tags=["Projects"])
 @limiter.limit("10/minute")
-def delete_project(request: Request, project_id: str, current_user: User = Depends(get_current_user)):
+def delete_project(request: Request, project_id: str, project: dict = Depends(verify_project_access), current_user: User = Depends(get_current_user)):
     """
     Soft-delete a project — sets status to Terminating.
     The controller will delete the Kubernetes namespace and then
     hard-delete the row once the namespace is gone.
     """
-    _get_project_or_404(project_id, current_user)
     try:
         with get_connection() as conn:
             with conn.cursor() as cur:
@@ -260,6 +264,119 @@ def delete_project(request: Request, project_id: str, current_user: User = Depen
         details={},
     )
     return {"message": f"Project {project_id} marked for termination"}
+
+from typing import Literal
+
+class AddMemberRequest(BaseModel):
+    email: str
+    role: Literal['editor', 'viewer']
+
+@app.get("/projects/{project_id}/members", tags=["Members"])
+@limiter.limit("100/minute")
+def list_project_members(
+    request: Request, 
+    project_id: str, 
+    project: dict = Depends(verify_project_access), 
+    current_user: User = Depends(get_current_user)
+):
+    try:
+        with get_connection() as conn:
+            with conn.cursor(cursor_factory=DictCursor) as cur:
+                # Enforce owner/admin requirement
+                if current_user.role != 'admin':
+                    cur.execute("SELECT role FROM project_members WHERE project_id = %s AND user_id = %s;", (project_id, current_user.user_id))
+                    caller_member = cur.fetchone()
+                    if not caller_member or caller_member['role'] != 'owner':
+                        raise HTTPException(status_code=403, detail="Only project owners can manage members")
+
+                cur.execute("""
+                    SELECT u.id as user_id, u.email, pm.role, pm.created_at 
+                    FROM project_members pm
+                    JOIN users u ON pm.user_id = u.id
+                    WHERE pm.project_id = %s
+                    ORDER BY pm.created_at ASC;
+                """, (project_id,))
+                return [_serialize(dict(r)) for r in cur.fetchall()]
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to list members: {e}")
+        raise HTTPException(status_code=500, detail="Failed to list project members")
+
+@app.post("/projects/{project_id}/members", status_code=201, tags=["Members"])
+@limiter.limit("20/minute")
+def add_project_member(
+    request: Request, 
+    project_id: str, 
+    body: AddMemberRequest, 
+    project: dict = Depends(verify_project_access), 
+    current_user: User = Depends(get_current_user)
+):
+    with get_connection() as conn:
+        with conn.cursor(cursor_factory=DictCursor) as cur:
+            # Enforce owner/admin requirement
+            if current_user.role != 'admin':
+                cur.execute("SELECT role FROM project_members WHERE project_id = %s AND user_id = %s;", (project_id, current_user.user_id))
+                caller_member = cur.fetchone()
+                if not caller_member or caller_member['role'] != 'owner':
+                    raise HTTPException(status_code=403, detail="Only project owners can manage members")
+
+            # Find user by email
+            cur.execute("SELECT id, email FROM users WHERE email = %s;", (body.email,))
+            target_user = cur.fetchone()
+            if not target_user:
+                raise HTTPException(status_code=404, detail="User not found")
+
+            try:
+                cur.execute("""
+                    INSERT INTO project_members (project_id, user_id, role) 
+                    VALUES (%s, %s, %s) RETURNING role, created_at;
+                """, (project_id, target_user['id'], body.role))
+                new_member = cur.fetchone()
+                conn.commit()
+                return _serialize({
+                    "user_id": target_user['id'],
+                    "email": target_user['email'],
+                    "role": new_member['role'],
+                    "created_at": new_member['created_at']
+                })
+            except psycopg2.errors.UniqueViolation:
+                conn.rollback()
+                raise HTTPException(status_code=409, detail="User is already a member of this project")
+
+@app.delete("/projects/{project_id}/members/{target_user_id}", tags=["Members"])
+@limiter.limit("20/minute")
+def remove_project_member(
+    request: Request, 
+    project_id: str, 
+    target_user_id: str, 
+    project: dict = Depends(verify_project_access), 
+    current_user: User = Depends(get_current_user)
+):
+    if target_user_id == current_user.user_id:
+        raise HTTPException(status_code=403, detail="Cannot remove yourself from a project")
+
+    with get_connection() as conn:
+        with conn.cursor(cursor_factory=DictCursor) as cur:
+            # Enforce owner/admin requirement
+            if current_user.role != 'admin':
+                cur.execute("SELECT role FROM project_members WHERE project_id = %s AND user_id = %s;", (project_id, current_user.user_id))
+                caller_member = cur.fetchone()
+                if not caller_member or caller_member['role'] != 'owner':
+                    raise HTTPException(status_code=403, detail="Only project owners can manage members")
+
+            cur.execute("SELECT role FROM project_members WHERE project_id = %s AND user_id = %s;", (project_id, target_user_id))
+            target_member = cur.fetchone()
+            
+            if not target_member:
+                raise HTTPException(status_code=404, detail="Member not found")
+                
+            if target_member['role'] == 'owner':
+                raise HTTPException(status_code=403, detail="Cannot remove the project owner")
+
+            cur.execute("DELETE FROM project_members WHERE project_id = %s AND user_id = %s;", (project_id, target_user_id))
+            conn.commit()
+            return {"message": "Member removed"}
 
 class AnalyzeRequest(BaseModel):
     repo_url: str
@@ -297,14 +414,13 @@ def analyze_repo(request: Request, body: AnalyzeRequest, current_user: User = De
 
 @app.post("/projects/{project_id}/deployments", status_code=202, tags=["Deployments"])
 @limiter.limit("5/minute")
-def create_deployment(request: Request, project_id: str, body: CreateDeploymentRequest, current_user: User = Depends(get_current_user)):
+def create_deployment(request: Request, project_id: str, body: CreateDeploymentRequest, project: dict = Depends(verify_project_access), current_user: User = Depends(get_current_user)):
     """
     Submit a deployment request. Only a repo URL is required.
     - The platform generates the image URI automatically from ECR_REPOSITORY_URL.
     - Scaling is handled by Karpenter/KEDA — the user does not set replicas.
     - Port defaults to 8080; override only if your app listens elsewhere.
     """
-    project = _get_project_or_404(project_id, current_user)
     if project["status"] not in ("Ready", "Provisioning"):
         raise HTTPException(
             status_code=409,
@@ -387,9 +503,8 @@ def create_deployment(request: Request, project_id: str, body: CreateDeploymentR
 
 @app.post("/projects/{project_id}/rollback", status_code=202, tags=["Deployments"])
 @limiter.limit("5/minute")
-def rollback_deployment(request: Request, project_id: str, current_user: User = Depends(get_current_user)):
+def rollback_deployment(request: Request, project_id: str, project: dict = Depends(verify_project_access), current_user: User = Depends(get_current_user)):
     """Re-deploy the last known-good image without rebuilding."""
-    project = _get_project_or_404(project_id, current_user)
     
     with get_connection() as conn:
         with conn.cursor(cursor_factory=DictCursor) as cur:
@@ -453,13 +568,12 @@ def list_deployments(
     project_id: str,
     limit: int = Query(default=20, ge=1, le=100),
     cursor: Optional[str] = Query(default=None, description="cursor format: <updated_at>|<deployment_id>"),
-    current_user: User = Depends(get_current_user),
+    project: dict = Depends(verify_project_access),
 ):
     """
     List deployments for a project with keyset pagination.
     Pass the `<updated_at>|<deployment_id>` value of the last item as `cursor` to get the next page.
     """
-    _get_project_or_404(project_id, current_user)
 
     query = """
         SELECT deployment_id, project_id, repo_url, image_uri, replicas, port, state, updated_at, last_error
@@ -491,9 +605,8 @@ def list_deployments(
 
 @app.get("/projects/{project_id}/deployments/{deployment_id}", tags=["Deployments"])
 @limiter.limit("100/minute")
-def get_deployment(request: Request, project_id: str, deployment_id: str, current_user: User = Depends(get_current_user)):
+def get_deployment(request: Request, project_id: str, deployment_id: str, project: dict = Depends(verify_project_access)):
     """Get a single deployment by ID."""
-    _get_project_or_404(project_id, current_user)
     deployment = _get_deployment_or_404(project_id, deployment_id)
     return _serialize(deployment)
 
@@ -547,8 +660,7 @@ async def websocket_deployment_status(websocket: WebSocket, project_id: str, dep
 
 
 @app.get("/projects/{project_id}/deployments/{deployment_id}/logs/stream", tags=["Deployments"])
-async def stream_logs(project_id: str, deployment_id: str, current_user: User = Depends(get_current_user)):
-    _get_project_or_404(project_id, current_user)
+async def stream_logs(project_id: str, deployment_id: str, project: dict = Depends(verify_project_access)):
     
     import redis.asyncio as aioredis
     r = aioredis.Redis(host=REDIS_HOST, port=REDIS_PORT, decode_responses=True)
@@ -628,9 +740,8 @@ async def websocket_deployment_logs(
 
 @app.get("/projects/{project_id}/deployments/{deployment_id}/builds", tags=["Builds"])
 @limiter.limit("100/minute")
-def list_builds(request: Request, project_id: str, deployment_id: str, current_user: User = Depends(get_current_user)):
+def list_builds(request: Request, project_id: str, deployment_id: str, project: dict = Depends(verify_project_access)):
     """List all builds for a deployment, most recent first."""
-    _get_project_or_404(project_id, current_user)
     _get_deployment_or_404(project_id, deployment_id)
 
     try:
@@ -652,9 +763,8 @@ def list_builds(request: Request, project_id: str, deployment_id: str, current_u
 
 @app.get("/projects/{project_id}/deployments/{deployment_id}/builds/{build_id}/logs", tags=["Builds"])
 @limiter.limit("100/minute")
-def get_build_logs(request: Request, project_id: str, deployment_id: str, build_id: str, current_user: User = Depends(get_current_user)):
+def get_build_logs(request: Request, project_id: str, deployment_id: str, build_id: str, project: dict = Depends(verify_project_access)):
     """Stream build log content directly, proxied through the API to avoid S3 CORS issues."""
-    _get_project_or_404(project_id, current_user)
     _get_deployment_or_404(project_id, deployment_id)
 
     try:
@@ -704,10 +814,9 @@ def get_audit_logs(
     request: Request,
     project_id: str,
     limit: int = Query(default=50, ge=1, le=500),
-    current_user: User = Depends(get_current_user),
+    project: dict = Depends(verify_project_access),
 ):
     """List audit log entries for a project."""
-    _get_project_or_404(project_id, current_user)
 
     try:
         with get_connection() as conn:
@@ -767,8 +876,7 @@ def get_global_audit_logs(
 
 @app.get("/projects/{project_id}/env", tags=["Environment"])
 @limiter.limit("100/minute")
-def get_env_vars(request: Request, project_id: str, current_user: User = Depends(get_current_user)):
-    project = _get_project_or_404(project_id, current_user)
+def get_env_vars(request: Request, project_id: str, project: dict = Depends(verify_project_access)):
     # Fix 6: Use project['id'] instead of name to avoid collision
     secret_id = f"shipzen/project/{project['id']}"
     sm = boto3.client('secretsmanager')
@@ -786,9 +894,8 @@ def get_env_vars(request: Request, project_id: str, current_user: User = Depends
 
 @app.put("/projects/{project_id}/env", tags=["Environment"])
 @limiter.limit("20/minute")
-def put_env_var(request: Request, project_id: str, body: dict, current_user: User = Depends(get_current_user)):
+def put_env_var(request: Request, project_id: str, body: dict, project: dict = Depends(verify_project_access)):
     """Expected body: {"key": "API_KEY", "value": "secret123"}"""
-    project = _get_project_or_404(project_id, current_user)
     key = body.get("key")
     value = body.get("value")
     if not key or not value:

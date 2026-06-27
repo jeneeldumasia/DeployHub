@@ -21,7 +21,7 @@ _token_cache = TTLCache(maxsize=1000, ttl=300)
 @dataclass
 class User:
     user_id: str
-    is_admin: bool = False
+    role: str = 'user'
 
 def get_current_user_from_token(token: str) -> User:
     return get_current_user(HTTPAuthorizationCredentials(scheme="Bearer", credentials=token))
@@ -33,7 +33,7 @@ def get_current_user(
         logger.warning("GITHUB_ENABLED not true — using stub user for local dev")
         from database import get_or_create_user
         db_user = get_or_create_user("local-dev-user", "admin@shipzen.local")
-        return User(user_id=db_user["id"], is_admin=(db_user["role"] == "admin"))
+        return User(user_id=db_user["id"], role=db_user["role"])
 
     if credentials is None:
         raise HTTPException(
@@ -90,4 +90,4 @@ def get_current_user(
 
     from database import get_or_create_user
     db_user = get_or_create_user(user_info["id"], user_info["email"])
-    return User(user_id=user_info["id"], is_admin=(db_user["role"] == "admin"))
+    return User(user_id=user_info["id"], role=db_user["role"])

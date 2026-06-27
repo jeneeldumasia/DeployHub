@@ -16,6 +16,7 @@ from metrics import (
     shipzen_drift_total, 
     shipzen_reconciliation_duration_seconds, 
     shipzen_deployment_success_total,
+    shipzen_active_deployments,
     start_metrics_server
 )
 
@@ -355,6 +356,14 @@ def reconcile_deployments(conn, cur, project):
                     )
                 except ApiException:
                     pass
+
+
+        # 3. Update active_deployments metric
+        running_count = sum(
+            1 for d_id, db_dep in db_deployments.items() 
+            if db_dep['state'] == 'Running' and d_id in k8s_dep_names and (k8s_dep_names[d_id].status.ready_replicas or 0) > 0
+        )
+        shipzen_active_deployments.labels(namespace=project.namespace).set(running_count)
 
     except Exception as e:
         logger.error(f"Error reconciling deployments for {project.name}: {e}")
