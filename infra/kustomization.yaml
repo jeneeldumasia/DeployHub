@@ -13,7 +13,8 @@ resources:
 images:
   - name: shipzen-api
     newName: 952994886652.dkr.ecr.us-east-1.amazonaws.com/shipzen/api
-    newTag: sha-c497ced
+    newTag: sha-9c9359d
+
 
 
 
@@ -55,7 +56,8 @@ images:
 
   - name: shipzen-controller
     newName: 952994886652.dkr.ecr.us-east-1.amazonaws.com/shipzen/controller
-    newTag: sha-c497ced
+    newTag: sha-9c9359d
+
 
 
 
@@ -97,7 +99,8 @@ images:
 
   - name: shipzen-worker
     newName: 952994886652.dkr.ecr.us-east-1.amazonaws.com/shipzen/worker
-    newTag: sha-c497ced
+    newTag: sha-9c9359d
+
 
 
 
@@ -142,7 +145,8 @@ images:
     newTag: sha-88e93b4
   - name: shipzen-ui
     newName: 952994886652.dkr.ecr.us-east-1.amazonaws.com/shipzen/ui
-    newTag: sha-c497ced
+    newTag: sha-9c9359d
+
 
 
 
