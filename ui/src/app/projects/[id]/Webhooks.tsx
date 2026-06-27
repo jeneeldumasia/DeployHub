@@ -1,9 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { Webhook, Copy, Check } from "lucide-react";
+import { Webhook, Copy, Check, Loader2 } from "lucide-react";
+import { api } from "@/lib/api";
+import { toast } from "sonner";
 
-export function Webhooks({ projectId, webhookSecret }: { projectId: string; webhookSecret?: string }) {
+export function Webhooks({ projectId, webhookSecret, repoUrl }: { projectId: string; webhookSecret?: string; repoUrl?: string }) {
   const [copiedUrl, setCopiedUrl] = useState(false);
   const [copiedSecret, setCopiedSecret] = useState(false);
 
@@ -25,6 +27,24 @@ export function Webhooks({ projectId, webhookSecret }: { projectId: string; webh
     }
   };
 
+  const [installing, setInstalling] = useState(false);
+
+  const autoConnect = async () => {
+    if (!repoUrl) {
+      toast.error("No repository URL found. Please deploy first.");
+      return;
+    }
+    setInstalling(true);
+    try {
+      const res = await api.webhooks.install(projectId, repoUrl);
+      toast.success(res.message || "Webhook automatically installed!");
+    } catch (e: any) {
+      toast.error(e.message || "Failed to install webhook");
+    } finally {
+      setInstalling(false);
+    }
+  };
+
   return (
     <div className="card overflow-hidden mt-6">
       <div className="px-6 py-4 border-b border-canvas-border flex items-center gap-2">
@@ -33,11 +53,21 @@ export function Webhooks({ projectId, webhookSecret }: { projectId: string; webh
       </div>
 
       <div className="p-6">
-        <p className="text-sm text-text-secondary mb-6">
-          Configure a webhook in your GitHub repository to automatically trigger deployments on push.
-        </p>
+        <div className="flex justify-between items-start mb-6">
+          <p className="text-sm text-text-secondary">
+            Configure a webhook in your GitHub repository to automatically trigger deployments on push.
+          </p>
+          <button
+            onClick={autoConnect}
+            disabled={installing || !repoUrl}
+            className="btn-primary flex items-center gap-2"
+          >
+            {installing && <Loader2 size={16} className="animate-spin" />}
+            Auto-Connect
+          </button>
+        </div>
 
-        <div className="space-y-4">
+        <div className="space-y-4 border-t border-canvas-border pt-6">
           <div>
             <label className="block text-xs font-medium text-text-secondary mb-1">Payload URL</label>
             <div className="flex items-center gap-2">

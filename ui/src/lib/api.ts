@@ -118,6 +118,14 @@ export const api = {
       ),
   },
 
+  webhooks: {
+    install: (projectId: string, repoUrl: string) =>
+      request<{ message: string }>(`/projects/${projectId}/webhooks/install`, {
+        method: "POST",
+        body: JSON.stringify({ repo_url: repoUrl }),
+      }),
+  },
+
   projects: {
     list: () => request<Project[]>("/projects"),
     get: (id: string) => request<Project>(`/projects/${id}`),
