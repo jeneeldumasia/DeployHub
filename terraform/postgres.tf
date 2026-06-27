@@ -91,7 +91,7 @@ resource "kubernetes_secret" "db_credentials" {
   }
 
   data = {
-    url = "postgresql://${local.pg_username}:${var.pg_password != "" ? var.pg_password : local.pg_password}@${local.pg_host}:${local.pg_port}/${local.pg_database}"
+    url = "postgresql://${local.pg_username}:${replace(var.pg_password != "" ? var.pg_password : local.pg_password, "@", "%40")}@${local.pg_host}:${local.pg_port}/${local.pg_database}"
   }
 
   depends_on = [helm_release.postgresql]
@@ -136,7 +136,7 @@ resource "kubernetes_secret" "db_credentials_build" {
   }
 
   data = {
-    url = "postgresql://${local.pg_username}:${var.pg_password != "" ? var.pg_password : local.pg_password}@${local.pg_host}:${local.pg_port}/${local.pg_database}"
+    url = "postgresql://${local.pg_username}:${replace(var.pg_password != "" ? var.pg_password : local.pg_password, "@", "%40")}@${local.pg_host}:${local.pg_port}/${local.pg_database}"
   }
 
   depends_on = [helm_release.postgresql, kubernetes_namespace.shipzen_build]
