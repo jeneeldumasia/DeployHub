@@ -136,6 +136,11 @@ resource "helm_release" "kube_prometheus_stack" {
   }
 
   set {
+    name  = "grafana.sidecar.dashboards.provider.foldersFromFilesStructure"
+    value = "true"
+  }
+
+  set {
     name  = "grafana.sidecar.dashboards.searchNamespace"
     value = "ALL"
   }
