@@ -5,7 +5,6 @@ import json
 import threading
 import os
 import subprocess
-import tempfile
 import shutil
 import uuid
 import boto3
@@ -19,14 +18,18 @@ from queue_client import QueueClient
 from state_machine import StateMachine, DeploymentState
 from builder import DockerfileBuilder, RailpackBuilder, BuildpackBuilder
 from metrics import (
-    start_metrics_server, 
-    shipzen_retry_total, 
+    start_metrics_server,
+    shipzen_build_duration_seconds,
     shipzen_queue_latency_seconds,
+    shipzen_retry_total,
     shipzen_deployment_failure_total,
-    shipzen_build_duration_seconds
+    shipzen_messages_in_flight,
+    shipzen_dlq_depth,
+    shipzen_deployments_total
 )
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+logging.basicConfig(level=logging.INFO,
+                    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger('worker')
 
 try:
@@ -47,10 +50,12 @@ def get_db_conn():
     conn.autocommit = True
     return conn
 
+
 def record_build(deployment_id: str, s3_key: str, status: str):
     build_id = str(uuid.uuid4())
     if not S3_LOG_BUCKET:
-        logger.warning(f"S3_LOG_BUCKET not set — skipping build record for {deployment_id}")
+        logger.warning(
+            f"S3_LOG_BUCKET not set — skipping build record for {deployment_id}")
         return
     s3_uri = f"s3://{S3_LOG_BUCKET}/{s3_key}"
     try:
@@ -64,37 +69,39 @@ def record_build(deployment_id: str, s3_key: str, status: str):
     except Exception as e:
         logger.error(f"Failed to record build for {deployment_id}: {e}")
 
+
 def monitor_job(job_name: str, deployment_id: str, image_name: str, state_machine: StateMachine, builder_type: str = "unknown", project_id: str = "unknown"):
     """Monitors the Kubernetes Job, streams logs to Redis, and finalizes the deployment."""
     logger.info(f"Monitoring Job {job_name} for deployment {deployment_id}")
     r = redis.Redis(host=config.REDIS_HOST, port=config.REDIS_PORT)
     s3_log_key = f"logs/{deployment_id}/build.log"
     build_start_time = time.time()
-    
+
     try:
         w = watch.Watch()
         pod_name = None
-        
+
         # Wait for Pod to exist
         for event in w.stream(core_v1.list_namespaced_pod, namespace="shipzen-build", label_selector=f"job-name={job_name}", timeout_seconds=300):
             pod = event['object']
             status = pod.status.phase
-            
+
             if status == "Pending":
-                r.publish(f"shipzen:status:{deployment_id}", json.dumps({"state": "Queued", "last_error": None}))
+                r.publish(f"shipzen:status:{deployment_id}", json.dumps(
+                    {"state": "Queued", "last_error": None}))
             elif status in ["Running", "Succeeded", "Failed"]:
                 pod_name = pod.metadata.name
                 w.stop()
                 break
-                
+
         if not pod_name:
             raise Exception("Timed out waiting for Pod to be created")
 
         state_machine.update_state(deployment_id, DeploymentState.BUILDING)
-        
+
         # Wait for container to start generating logs (sometimes there's a slight delay after phase=Running)
         time.sleep(2)
-        
+
         # Stream Logs
         stdout_chunks = []
         try:
@@ -105,7 +112,8 @@ def monitor_job(job_name: str, deployment_id: str, image_name: str, state_machin
             for line in log_stream:
                 stdout_chunks.append(line)
                 try:
-                    r.publish(f"shipzen:logs:{deployment_id}", line.decode('utf-8', errors='replace'))
+                    r.publish(f"shipzen:logs:{deployment_id}", line.decode(
+                        'utf-8', errors='replace'))
                 except Exception:
                     pass
         except ApiException as e:
@@ -127,81 +135,104 @@ def monitor_job(job_name: str, deployment_id: str, image_name: str, state_machin
         try:
             if S3_LOG_BUCKET:
                 import io
-                s3.upload_fileobj(io.BytesIO(stdout_bytes), S3_LOG_BUCKET, s3_log_key)
+                s3.upload_fileobj(io.BytesIO(stdout_bytes),
+                                  S3_LOG_BUCKET, s3_log_key)
         except Exception as e:
             logger.error(f"S3 upload failed: {e}")
 
         # Observe build duration
         build_duration = time.time() - build_start_time
-        shipzen_build_duration_seconds.labels(project_id=project_id, builder_type=builder_type).observe(build_duration)
+        shipzen_build_duration_seconds.labels(
+            project_id=project_id, builder_type=builder_type).observe(build_duration)
 
         if job_succeeded:
-            logger.info(f"Build {deployment_id} successful. Checking port/ECR...")
-            
+            logger.info(
+                f"Build {deployment_id} successful. Checking port/ECR...")
+
             # Fix 7: ecr variable used out of scope, move to before crane block
-            ecr = boto3.client('ecr', region_name=os.getenv("AWS_REGION", "us-east-1"))
+            ecr = boto3.client('ecr', region_name=os.getenv(
+                "AWS_REGION", "us-east-1"))
             # Dynamic Port Detection via Crane
             try:
-                auth_data = ecr.get_authorization_token()['authorizationData'][0]
-                token = base64.b64decode(auth_data['authorizationToken']).decode('utf-8')
+                auth_data = ecr.get_authorization_token()[
+                    'authorizationData'][0]
+                token = base64.b64decode(
+                    auth_data['authorizationToken']).decode('utf-8')
                 username, password = token.split(':')
-                registry_url = auth_data['proxyEndpoint'].replace('https://', '')
-                subprocess.run(["crane", "auth", "login", registry_url, "-u", username, "-p", password], check=True, capture_output=True)
-                
-                crane_out = subprocess.check_output(["crane", "config", image_name], text=True)
+                registry_url = auth_data['proxyEndpoint'].replace(
+                    'https://', '')
+                subprocess.run(["crane", "auth", "login", registry_url, "-u",
+                               username, "-p", password], check=True, capture_output=True)
+
+                crane_out = subprocess.check_output(
+                    ["crane", "config", image_name], text=True)
                 config_json = json.loads(crane_out)
-                exposed_ports = config_json.get("config", {}).get("ExposedPorts", {})
-                
+                exposed_ports = config_json.get(
+                    "config", {}).get("ExposedPorts", {})
+
                 if exposed_ports:
                     first_port = list(exposed_ports.keys())[0].split('/')[0]
                     conn = get_db_conn()
                     with conn.cursor() as cur:
-                        cur.execute("UPDATE deployments SET port = %s WHERE deployment_id = %s;", (int(first_port), deployment_id))
+                        cur.execute("UPDATE deployments SET port = %s WHERE deployment_id = %s;", (int(
+                            first_port), deployment_id))
                     # Fix 10: autocommit=True: no explicit commit needed
                     conn.close()
             except Exception as e:
                 logger.warning(f"Failed to extract exposed port: {e}")
-                
+
             # ECR Image Scanning Gate
             try:
                 registry_and_repo, image_tag = image_name.rsplit(':', 1)
                 repo_name = registry_and_repo.split('/', 1)[1]
-                
+
                 scan_status = "IN_PROGRESS"
                 attempts = 0
                 while scan_status in ("IN_PROGRESS", "PENDING") and attempts < 12:
                     time.sleep(5)
                     attempts += 1
-                    res = ecr.describe_image_scan_findings(repositoryName=repo_name, imageId={'imageTag': image_tag})
-                    scan_status = res.get('imageScanStatus', {}).get('status', 'FAILED')
-                    
+                    res = ecr.describe_image_scan_findings(
+                        repositoryName=repo_name, imageId={'imageTag': image_tag})
+                    scan_status = res.get('imageScanStatus', {}).get(
+                        'status', 'FAILED')
+
                 if scan_status == "COMPLETE":
-                    findings = res.get('imageScanFindings', {}).get('findingSeverityCounts', {})
+                    findings = res.get('imageScanFindings', {}).get(
+                        'findingSeverityCounts', {})
                     fail_on = os.getenv("IMAGE_SCAN_FAIL_ON", "CRITICAL")
                     if findings.get(fail_on, 0) > 0:
-                        raise Exception(f"Image scan: {fail_on} vulnerability found")
+                        raise Exception(
+                            f"Image scan: {fail_on} vulnerability found")
             except Exception as e:
                 logger.error(f"Image scan failed: {e}")
                 record_build(deployment_id, s3_log_key, "Failed")
+                shipzen_deployment_failure_total.inc()
+                shipzen_deployments_total.labels(state="Failed", project_id=project_id_db).inc()
                 state_machine.update_state(deployment_id, "Failed", str(e))
                 return
 
             record_build(deployment_id, s3_log_key, "Success")
             state_machine.update_state(deployment_id, "Deploying")
-            
+
         else:
             logger.error(f"Job {job_name} failed.")
             record_build(deployment_id, s3_log_key, "Failed")
-            state_machine.update_state(deployment_id, "Failed", "Build step failed.")
+            shipzen_deployment_failure_total.inc()
+            shipzen_deployments_total.labels(state="Failed", project_id=project_id_db).inc()
+            state_machine.update_state(
+                deployment_id, "Failed", "Build step failed.")
 
     except Exception as e:
         logger.error(f"Error monitoring job {job_name}: {e}")
         record_build(deployment_id, s3_log_key, "Failed")
+        shipzen_deployment_failure_total.inc()
+        shipzen_deployments_total.labels(state="Failed", project_id=project_id_db).inc()
         state_machine.update_state(deployment_id, "Failed", str(e))
     finally:
         # Cleanup Job
         try:
-            batch_v1.delete_namespaced_job(job_name, "shipzen-build", propagation_policy="Background")
+            batch_v1.delete_namespaced_job(
+                job_name, "shipzen-build", propagation_policy="Background")
         except Exception:
             pass
 
@@ -211,7 +242,7 @@ def process_message(queue: QueueClient, state_machine: StateMachine, message_id:
     repo_url = data.get("repo_url")
     branch = data.get("branch", "main")
     image_name = data.get("image_name")
-    
+
     if not deployment_id or not repo_url or not image_name:
         queue.add_to_dlq(message_id, data)
         return
@@ -223,21 +254,36 @@ def process_message(queue: QueueClient, state_machine: StateMachine, message_id:
 
     # Fix 1: Skip building if this is a rollback, just advance state
     if data.get("is_rollback") == "true":
-        logger.info(f"Deployment {deployment_id} is a rollback, skipping build.")
+        logger.info(
+            f"Deployment {deployment_id} is a rollback, skipping build.")
         state_machine.update_state(deployment_id, "Deploying")
         queue.ack_message(message_id)
         return
 
     logger.info(f"Processing deployment {deployment_id}")
-    
+    shipzen_deployments_total.labels(state="Processing", project_id=deployment.get("project_id", "unknown") if deployment else "unknown").inc()
+
+    # Calculate queue latency from Redis stream ID
+    try:
+        if isinstance(message_id, bytes):
+            msg_id_str = message_id.decode("utf-8")
+        else:
+            msg_id_str = str(message_id)
+        timestamp_ms = int(msg_id_str.split("-")[0])
+        queue_latency = time.time() - (timestamp_ms / 1000.0)
+        shipzen_queue_latency_seconds.observe(queue_latency)
+    except Exception:
+        pass
+
     # Fix 8: Workspace directory leaks on clone failure, moved creation inside try and cleanup to finally
     workspace = f"/tmp/workspace_{deployment_id}"
     try:
         # Shallow clone to detect builder
         os.makedirs(workspace, exist_ok=True)
         # Fix 9: Git clone in worker has no timeout
-        subprocess.run(["git", "clone", "--depth=1", "--branch", branch, repo_url, workspace], check=True, timeout=120)
-        
+        subprocess.run(["git", "clone", "--depth=1", "--branch",
+                       branch, repo_url, workspace], check=True, timeout=120)
+
         # Check overrides
         overrides = {}
         config_path = os.path.join(workspace, "shipzen.yaml")
@@ -252,11 +298,14 @@ def process_message(queue: QueueClient, state_machine: StateMachine, message_id:
                         conn = get_db_conn()
                         with conn.cursor() as cur:
                             if new_port and new_health:
-                                cur.execute("UPDATE deployments SET port = %s, health_check_path = %s WHERE deployment_id = %s;", (new_port, new_health, deployment_id))
+                                cur.execute("UPDATE deployments SET port = %s, health_check_path = %s WHERE deployment_id = %s;", (
+                                    new_port, new_health, deployment_id))
                             elif new_port:
-                                cur.execute("UPDATE deployments SET port = %s WHERE deployment_id = %s;", (new_port, deployment_id))
+                                cur.execute(
+                                    "UPDATE deployments SET port = %s WHERE deployment_id = %s;", (new_port, deployment_id))
                             elif new_health:
-                                cur.execute("UPDATE deployments SET health_check_path = %s WHERE deployment_id = %s;", (new_health, deployment_id))
+                                cur.execute(
+                                    "UPDATE deployments SET health_check_path = %s WHERE deployment_id = %s;", (new_health, deployment_id))
                         conn.close()
 
         # SPA detection
@@ -265,7 +314,8 @@ def process_message(queue: QueueClient, state_machine: StateMachine, message_id:
             with open(package_json_path, 'r') as f:
                 pj = json.load(f)
             scripts = pj.get("scripts", {})
-            deps = {**pj.get("dependencies", {}), **pj.get("devDependencies", {})}
+            deps = {**pj.get("dependencies", {}), **
+                    pj.get("devDependencies", {})}
             if "start" not in scripts:
                 if any(m in deps for m in ["vite", "react-scripts", "vue", "svelte", "astro"]) or ("build" in scripts):
                     overrides["inject_server_js"] = True
@@ -279,7 +329,7 @@ def process_message(queue: QueueClient, state_machine: StateMachine, message_id:
             if b.detect(workspace):
                 selected_builder = b
                 break
-        
+
         if not selected_builder:
             raise Exception("No suitable builder found")
 
@@ -289,8 +339,10 @@ def process_message(queue: QueueClient, state_machine: StateMachine, message_id:
         # CreateRepository is idempotent: we catch RepositoryAlreadyExistsException.
         try:
             registry_and_repo = image_name.rsplit(":", 1)[0]   # strip the tag
-            repo_name = registry_and_repo.split("/", 1)[1]     # strip the registry hostname
-            ecr_client = boto3.client("ecr", region_name=os.getenv("AWS_REGION", "us-east-1"))
+            repo_name = registry_and_repo.split(
+                "/", 1)[1]     # strip the registry hostname
+            ecr_client = boto3.client(
+                "ecr", region_name=os.getenv("AWS_REGION", "us-east-1"))
             ecr_client.create_repository(
                 repositoryName=repo_name,
                 imageTagMutability="IMMUTABLE",
@@ -303,23 +355,28 @@ def process_message(queue: QueueClient, state_machine: StateMachine, message_id:
             logger.warning(f"Could not ensure ECR repository exists: {e}")
             # Non-fatal — the build may still succeed if the repo was created externally
 
-        manifest = selected_builder.generate_job_manifest(deployment_id, repo_url, branch, image_name, overrides)
+        manifest = selected_builder.generate_job_manifest(
+            deployment_id, repo_url, branch, image_name, overrides)
         job_name = manifest["metadata"]["name"]
-        
+
         # Create Job
         try:
-            batch_v1.create_namespaced_job(namespace="shipzen-build", body=manifest)
+            batch_v1.create_namespaced_job(
+                namespace="shipzen-build", body=manifest)
         except ApiException as e:
             raise Exception(f"Kubernetes Job creation failed (HTTP {e.status}): {e.reason}. "
                             f"Ensure the 'shipzen-build' namespace exists and the worker ServiceAccount has batch/jobs create permission.")
         logger.info(f"Created Job {job_name} for deployment {deployment_id}")
-        
+
         # Spawn thread to monitor Job
-        builder_type = selected_builder.name if hasattr(selected_builder, 'name') else type(selected_builder).__name__
-        project_id_db = deployment.get("project_id", "unknown") if deployment else "unknown"
-        t = threading.Thread(target=monitor_job, args=(job_name, deployment_id, image_name, state_machine, builder_type, project_id_db))
+        builder_type = selected_builder.name if hasattr(
+            selected_builder, 'name') else type(selected_builder).__name__
+        project_id_db = deployment.get(
+            "project_id", "unknown") if deployment else "unknown"
+        t = threading.Thread(target=monitor_job, args=(
+            job_name, deployment_id, image_name, state_machine, builder_type, project_id_db))
         t.start()
-        
+
         queue.ack_message(message_id)
 
     except Exception as e:
@@ -327,7 +384,10 @@ def process_message(queue: QueueClient, state_machine: StateMachine, message_id:
         # Persist the actual error so the UI can display it rather than the
         # generic "Build step failed." message
         state_machine.update_state(deployment_id, "Failed", str(e))
+        shipzen_deployment_failure_total.inc()
+        shipzen_deployments_total.labels(state="Failed", project_id=deployment.get("project_id", "unknown") if deployment else "unknown").inc()
         queue.add_to_dlq(message_id, data)
+        shipzen_dlq_depth.inc()
     finally:
         shutil.rmtree(workspace, ignore_errors=True)
 
@@ -337,21 +397,23 @@ def main():
     queue = QueueClient()
     state_machine = StateMachine()
 
-    logger.info(f"Worker {config.CONSUMER_NAME} started. Listening on stream {config.STREAM_NAME}")
+    logger.info(
+        f"Worker {config.CONSUMER_NAME} started. Listening on stream {config.STREAM_NAME}")
 
     while True:
         try:
             claimed = queue.recover_pending_messages()
             if claimed:
                 for msg_id, data in claimed:
+                    shipzen_retry_total.inc()
                     process_message(queue, state_machine, msg_id, data)
-                    
+
             messages = queue.get_messages(count=5, block_ms=2000)
             if messages:
                 for stream_name, msg_list in messages:
                     for msg_id, data in msg_list:
                         process_message(queue, state_machine, msg_id, data)
-        except Exception as e:
+        except Exception:
             logger.exception("Queue read error")
             time.sleep(2)
 

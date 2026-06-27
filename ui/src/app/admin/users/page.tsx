@@ -14,9 +14,9 @@ async function getUsers(token: string) {
 
 export default async function AdminUsersPage() {
   const session = await auth();
-  if (!(session as any)?.accessToken) redirect("/login");
+  if (!(session as { accessToken?: string })?.accessToken) redirect("/login");
 
-  const users = await getUsers((session as any).accessToken as string);
+  const users = await getUsers((session as { accessToken?: string }).accessToken as string);
 
   async function promoteUser(formData: FormData) {
     "use server";
@@ -28,7 +28,7 @@ export default async function AdminUsersPage() {
       method: "PUT",
       headers: { 
         "Content-Type": "application/json",
-        Authorization: `Bearer ${(session as any)?.accessToken}` 
+        Authorization: `Bearer ${(session as { accessToken?: string })?.accessToken}` 
       },
       body: JSON.stringify({ role })
     });
@@ -60,7 +60,7 @@ export default async function AdminUsersPage() {
             </tr>
           </thead>
           <tbody className="divide-y divide-white/10">
-            {users.map((u: any) => (
+            {users.map((u: Record<string, unknown>) => (
               <tr key={u.id} className="hover:bg-white/5 transition-colors">
                 <td className="px-6 py-4 font-mono text-xs">{u.id}</td>
                 <td className="px-6 py-4">{u.email || "No Email"}</td>

@@ -13,14 +13,15 @@ import redis
 import json
 from models import ProjectStatus, ProjectSchema
 from metrics import (
-    shipzen_drift_total, 
-    shipzen_reconciliation_duration_seconds, 
+    shipzen_drift_total,
+    shipzen_reconciliation_duration_seconds,
     shipzen_deployment_success_total,
     shipzen_active_deployments,
     start_metrics_server
 )
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+logging.basicConfig(level=logging.INFO,
+                    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger('controller')
 
 try:
@@ -28,7 +29,7 @@ try:
 except k8s_config.ConfigException:
     k8s_config.load_kube_config()
 
-k8s_client  = client.ApiClient()
+k8s_client = client.ApiClient()
 k8s_core_api = client.CoreV1Api()
 k8s_apps_api = client.AppsV1Api()
 k8s_custom_api = client.CustomObjectsApi()
@@ -51,7 +52,8 @@ jinja_env = Environment(loader=FileSystemLoader("templates"))
 
 def ensure_ecr_repository(project_id: str):
     try:
-        ecr = boto3.client('ecr', region_name=os.getenv("AWS_REGION", "us-east-1"))
+        ecr = boto3.client('ecr', region_name=os.getenv(
+            "AWS_REGION", "us-east-1"))
         repo_name = f"shipzen-builds/{project_id}"
         try:
             ecr.describe_repositories(repositoryNames=[repo_name])
@@ -92,11 +94,14 @@ def _wait_for_schema(max_attempts: int = 30, delay: int = 10):
             logger.info("Database schema is ready.")
             return
         except psycopg2.OperationalError as e:
-            logger.warning(f"DB not reachable yet (attempt {attempt}/{max_attempts}): {e}")
+            logger.warning(
+                f"DB not reachable yet (attempt {attempt}/{max_attempts}): {e}")
         except psycopg2.errors.UndefinedTable:
-            logger.warning(f"Schema not ready yet (attempt {attempt}/{max_attempts}), waiting {delay}s...")
+            logger.warning(
+                f"Schema not ready yet (attempt {attempt}/{max_attempts}), waiting {delay}s...")
         except Exception as e:
-            logger.warning(f"Unexpected DB error (attempt {attempt}/{max_attempts}): {e}")
+            logger.warning(
+                f"Unexpected DB error (attempt {attempt}/{max_attempts}): {e}")
         finally:
             if conn is not None:
                 try:
@@ -104,7 +109,8 @@ def _wait_for_schema(max_attempts: int = 30, delay: int = 10):
                 except Exception:
                     pass
         time.sleep(delay)
-    raise RuntimeError(f"Database schema not ready after {max_attempts * delay}s — aborting")
+    raise RuntimeError(
+        f"Database schema not ready after {max_attempts * delay}s — aborting")
 
 
 def apply_manifests(manifest_str: str):
@@ -117,11 +123,11 @@ def apply_manifests(manifest_str: str):
     for doc in docs:
         if doc is None:
             continue
-            
+
         kind = doc.get("kind")
         name = doc.get("metadata", {}).get("name")
         namespace = doc.get("metadata", {}).get("namespace", "default")
-        
+
         try:
             if kind == "HTTPRoute":
                 k8s_custom_api.create_namespaced_custom_object(
@@ -140,9 +146,11 @@ def apply_manifests(manifest_str: str):
             if e.status == 409:
                 try:
                     if kind == "Deployment":
-                        k8s_apps_api.patch_namespaced_deployment(name, namespace, doc)
+                        k8s_apps_api.patch_namespaced_deployment(
+                            name, namespace, doc)
                     elif kind == "Service":
-                        k8s_core_api.patch_namespaced_service(name, namespace, doc)
+                        k8s_core_api.patch_namespaced_service(
+                            name, namespace, doc)
                     elif kind == "HTTPRoute":
                         k8s_custom_api.patch_namespaced_custom_object(
                             "gateway.networking.k8s.io", "v1", namespace, "httproutes", name, doc)
@@ -154,9 +162,11 @@ def apply_manifests(manifest_str: str):
                     elif kind == "NetworkPolicy":
                         client.NetworkingV1Api().patch_namespaced_network_policy(name, namespace, doc)
                     elif kind == "ResourceQuota":
-                        k8s_core_api.patch_namespaced_resource_quota(name, namespace, doc)
+                        k8s_core_api.patch_namespaced_resource_quota(
+                            name, namespace, doc)
                     elif kind == "LimitRange":
-                        k8s_core_api.patch_namespaced_limit_range(name, namespace, doc)
+                        k8s_core_api.patch_namespaced_limit_range(
+                            name, namespace, doc)
                     elif kind == "Role":
                         client.RbacAuthorizationV1Api().patch_namespaced_role(name, namespace, doc)
                     elif kind == "RoleBinding":
@@ -209,7 +219,8 @@ def reconcile():
 
                     with conn.cursor(cursor_factory=DictCursor) as project_cur:
                         if project.status == ProjectStatus.PROVISIONING:
-                            logger.info(f"Provisioning project: {project.name} ({project.namespace})")
+                            logger.info(
+                                f"Provisioning project: {project.name} ({project.namespace})")
                             template = jinja_env.get_template("tenant.yaml.j2")
                             manifests = template.render(
                                 namespace=project.namespace,
@@ -218,7 +229,7 @@ def reconcile():
                             )
                             # Fix #1: actually applies manifests now.
                             apply_manifests(manifests)
-    
+
                             # Fix #12: only mark READY after verifying the namespace
                             # was actually created. This breaks the race where the DB
                             # is marked READY before K8s has processed the request.
@@ -229,35 +240,43 @@ def reconcile():
                                     (ProjectStatus.READY.value, project.id)
                                 )
                                 conn.commit()
-                                logger.info(f"Project {project.name} provisioned and Ready.")
+                                logger.info(
+                                    f"Project {project.name} provisioned and Ready.")
                             else:
                                 # Namespace not visible yet; leave as PROVISIONING
                                 # and retry on the next reconcile tick.
                                 conn.rollback()
-                                logger.info(f"Namespace {project.namespace} not yet visible; will retry.")
-    
+                                logger.info(
+                                    f"Namespace {project.namespace} not yet visible; will retry.")
+
                         elif project.status == ProjectStatus.TERMINATING:
-                            logger.info(f"Terminating project: {project.name} ({project.namespace})")
+                            logger.info(
+                                f"Terminating project: {project.name} ({project.namespace})")
                             if check_namespace_exists(project.namespace):
                                 delete_namespace(project.namespace)
-                                logger.info(f"Namespace {project.namespace} deletion triggered.")
+                                logger.info(
+                                    f"Namespace {project.namespace} deletion triggered.")
                                 conn.commit()
                             else:
-                                project_cur.execute("DELETE FROM projects WHERE id = %s;", (project.id,))
+                                project_cur.execute(
+                                    "DELETE FROM projects WHERE id = %s;", (project.id,))
                                 conn.commit()
-                                logger.info(f"Project {project.name} permanently cleaned up.")
-    
+                                logger.info(
+                                    f"Project {project.name} permanently cleaned up.")
+
                         elif project.status == ProjectStatus.READY:
                             if not check_namespace_exists(project.namespace):
                                 shipzen_drift_total.inc()
-                                logger.warning(f"Drift detected! Namespace {project.namespace} missing for Ready project.")
+                                logger.warning(
+                                    f"Drift detected! Namespace {project.namespace} missing for Ready project.")
                                 project_cur.execute(
                                     "UPDATE projects SET status = %s WHERE id = %s;",
                                     (ProjectStatus.PROVISIONING.value, project.id)
                                 )
                                 conn.commit()
                             else:
-                                reconcile_deployments(conn, project_cur, project)
+                                reconcile_deployments(
+                                    conn, project_cur, project)
 
                 except Exception as e:
                     logger.error(f"Error reconciling project {row['id']}: {e}")
@@ -279,21 +298,26 @@ def reconcile():
 
 def reconcile_deployments(conn, cur, project):
     """Reconciles Deployments, Services, and HTTPRoutes for a ready project namespace."""
-    cur.execute("SELECT * FROM deployments WHERE project_id = %s;", (project.id,))
-    db_deployments = {str(row['deployment_id']): dict(row) for row in cur.fetchall()}
+    cur.execute("SELECT * FROM deployments WHERE project_id = %s;",
+                (project.id,))
+    db_deployments = {str(row['deployment_id']): dict(row)
+                      for row in cur.fetchall()}
 
     try:
-        k8s_deps = k8s_apps_api.list_namespaced_deployment(namespace=project.namespace)
+        k8s_deps = k8s_apps_api.list_namespaced_deployment(
+            namespace=project.namespace)
         k8s_dep_names = {d.metadata.name: d for d in k8s_deps.items}
 
-        k8s_svcs = k8s_core_api.list_namespaced_service(namespace=project.namespace)
+        k8s_svcs = k8s_core_api.list_namespaced_service(
+            namespace=project.namespace)
         k8s_svc_names = {s.metadata.name for s in k8s_svcs.items}
-        
+
         try:
             k8s_routes = k8s_custom_api.list_namespaced_custom_object(
                 "gateway.networking.k8s.io", "v1", namespace=project.namespace, plural="httproutes"
             )
-            k8s_route_names = {r['metadata']['name'] for r in k8s_routes.get('items', [])}
+            k8s_route_names = {r['metadata']['name']
+                               for r in k8s_routes.get('items', [])}
         except ApiException:
             k8s_route_names = set()
 
@@ -307,7 +331,8 @@ def reconcile_deployments(conn, cur, project):
                 )
                 if missing_resources:
                     shipzen_drift_total.inc()
-                    logger.warning(f"Drift: Deployment {d_id} or its resources missing in K8s. Recreating...")
+                    logger.warning(
+                        f"Drift: Deployment {d_id} or its resources missing in K8s. Recreating...")
                     template = jinja_env.get_template("app-deployment.yaml.j2")
                     manifests = template.render(
                         deployment_name=d_id,
@@ -325,19 +350,24 @@ def reconcile_deployments(conn, cur, project):
                     ready_replicas = k8s_dep.status.ready_replicas or 0
                     if ready_replicas == 0 and db_dep['state'] == 'Running':
                         shipzen_drift_total.inc()
-                        logger.warning(f"Drift: Deployment {d_id} is failing in K8s.")
+                        logger.warning(
+                            f"Drift: Deployment {d_id} is failing in K8s.")
                         cur.execute(
                             "UPDATE deployments SET state = %s, last_error = %s WHERE deployment_id = %s;",
                             ('Failed', 'Kubernetes Deployment Failed/CrashLoopBackOff', d_id)
                         )
                         conn.commit()
                         try:
-                            r = redis.Redis(host=os.getenv("REDIS_HOST", "redis-master.shipzen-system.svc.cluster.local"), port=6379)
-                            r.publish(f"shipzen:status:{d_id}", json.dumps({"state": "Failed", "last_error": "Kubernetes Deployment Failed/CrashLoopBackOff"}))
+                            r = redis.Redis(host=os.getenv(
+                                "REDIS_HOST", "redis-master.shipzen-system.svc.cluster.local"), port=6379)
+                            r.publish(f"shipzen:status:{d_id}", json.dumps(
+                                {"state": "Failed", "last_error": "Kubernetes Deployment Failed/CrashLoopBackOff"}))
                         except Exception as pub_e:
-                            logger.warning(f"Failed to publish to Redis: {pub_e}")
+                            logger.warning(
+                                f"Failed to publish to Redis: {pub_e}")
                     elif ready_replicas > 0 and db_dep['state'] in ['Deploying', 'Verifying']:
-                        logger.info(f"Deployment {d_id} is now Running (Ready Replicas: {ready_replicas})")
+                        logger.info(
+                            f"Deployment {d_id} is now Running (Ready Replicas: {ready_replicas})")
                         cur.execute(
                             "UPDATE deployments SET state = %s, last_error = NULL WHERE deployment_id = %s;",
                             ('Running', d_id)
@@ -345,19 +375,25 @@ def reconcile_deployments(conn, cur, project):
                         conn.commit()
                         shipzen_deployment_success_total.inc()
                         try:
-                            r = redis.Redis(host=os.getenv("REDIS_HOST", "redis-master.shipzen-system.svc.cluster.local"), port=6379)
-                            r.publish(f"shipzen:status:{d_id}", json.dumps({"state": "Running", "last_error": None}))
+                            r = redis.Redis(host=os.getenv(
+                                "REDIS_HOST", "redis-master.shipzen-system.svc.cluster.local"), port=6379)
+                            r.publish(f"shipzen:status:{d_id}", json.dumps(
+                                {"state": "Running", "last_error": None}))
                         except Exception as pub_e:
-                            logger.warning(f"Failed to publish to Redis: {pub_e}")
+                            logger.warning(
+                                f"Failed to publish to Redis: {pub_e}")
 
         # 2. Orphan Resources Cleanup
         for k8s_name in k8s_dep_names.keys():
             if k8s_name not in db_deployments or db_deployments[k8s_name]['state'] not in ['Running', 'Verifying', 'Deploying']:
                 shipzen_drift_total.inc()
-                logger.warning(f"Drift: Orphan Deployment {k8s_name} found in K8s. Cleaning up...")
-                k8s_apps_api.delete_namespaced_deployment(name=k8s_name, namespace=project.namespace)
+                logger.warning(
+                    f"Drift: Orphan Deployment {k8s_name} found in K8s. Cleaning up...")
+                k8s_apps_api.delete_namespaced_deployment(
+                    name=k8s_name, namespace=project.namespace)
                 try:
-                    k8s_core_api.delete_namespaced_service(name=f"{k8s_name}-svc", namespace=project.namespace)
+                    k8s_core_api.delete_namespaced_service(
+                        name=f"{k8s_name}-svc", namespace=project.namespace)
                     k8s_custom_api.delete_namespaced_custom_object(
                         group="gateway.networking.k8s.io",
                         version="v1",
@@ -368,13 +404,13 @@ def reconcile_deployments(conn, cur, project):
                 except ApiException:
                     pass
 
-
         # 3. Update active_deployments metric
         running_count = sum(
-            1 for d_id, db_dep in db_deployments.items() 
+            1 for d_id, db_dep in db_deployments.items()
             if db_dep['state'] == 'Running' and d_id in k8s_dep_names and (k8s_dep_names[d_id].status.ready_replicas or 0) > 0
         )
-        shipzen_active_deployments.labels(namespace=project.namespace).set(running_count)
+        shipzen_active_deployments.labels(
+            namespace=project.namespace).set(running_count)
 
     except Exception as e:
         logger.error(f"Error reconciling deployments for {project.name}: {e}")

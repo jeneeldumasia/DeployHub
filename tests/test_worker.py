@@ -24,3 +24,4 @@ def test_update_state_uses_update():
         call_args = mock_cur.execute.call_args[0][0]
         assert "UPDATE deployments" in call_args
         assert "INSERT" not in call_args
+import worker.state_machine

@@ -47,8 +47,8 @@ export default function NewDeploymentPage() {
         } else if (data.branches.length > 0) {
           setBranch(data.branches[0]);
         }
-      } catch (err: any) {
-        setBranchError(err.message || "Failed to load branches");
+      } catch (err: unknown) {
+        setBranchError(err instanceof Error ? err.message : "Failed to load branches");
       } finally {
         setLoadingBranches(false);
       }

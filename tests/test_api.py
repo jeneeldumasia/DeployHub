@@ -47,3 +47,4 @@ def test_webhook_auth_logic():
     
     # Simulating the check
     assert last_deploy_repo_url != incoming_repo_url, "Webhook should be rejected!"
+import api.main

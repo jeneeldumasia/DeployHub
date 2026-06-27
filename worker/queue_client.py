@@ -8,7 +8,8 @@ logger = logging.getLogger(__name__)
 
 class QueueClient:
     def __init__(self):
-        self.r = redis.Redis(host=config.REDIS_HOST, port=config.REDIS_PORT, decode_responses=True)
+        self.r = redis.Redis(host=config.REDIS_HOST,
+                             port=config.REDIS_PORT, decode_responses=True)
         self.stream = config.STREAM_NAME
         self.group = config.CONSUMER_GROUP
         self.consumer = config.CONSUMER_NAME
@@ -17,7 +18,8 @@ class QueueClient:
 
     def _ensure_group(self):
         try:
-            self.r.xgroup_create(self.stream, self.group, id='0', mkstream=True)
+            self.r.xgroup_create(self.stream, self.group,
+                                 id='0', mkstream=True)
         except redis.exceptions.ResponseError as e:
             if "BUSYGROUP" not in str(e):
                 raise
@@ -54,9 +56,10 @@ class QueueClient:
             for msg in claimed_messages:
                 # msg is typically [message_id, data]
                 message_id = msg[0]
-                logger.info(f"Recovered pending message {message_id} via XAUTOCLAIM")
+                logger.info(
+                    f"Recovered pending message {message_id} via XAUTOCLAIM")
                 all_claimed.append(msg)
-                
+
             if next_start == '0-0':
                 break
             start_id = next_start

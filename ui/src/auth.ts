@@ -23,7 +23,7 @@ if (process.env.GITHUB_CLIENT_ID) {
       async authorize(credentials) {
         return {
           id: "local-dev-user",
-          name: (credentials as any)?.username || "Local Admin",
+          name: (credentials as Record<string, string>)?.username || "Local Admin",
           email: "admin@shipzen.local",
           image: "https://api.dicebear.com/7.x/avataaars/svg?seed=admin"
         }
@@ -42,7 +42,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       return token
     },
     async session({ session, token }) {
-      // @ts-ignore
+      // @ts-expect-error custom property
       session.accessToken = token.accessToken
       return session
     },

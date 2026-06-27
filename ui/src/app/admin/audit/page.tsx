@@ -13,9 +13,9 @@ async function getAuditLogs(token: string) {
 
 export default async function AdminAuditPage() {
   const session = await auth();
-  if (!(session as any)?.accessToken) redirect("/login");
+  if (!(session as { accessToken?: string })?.accessToken) redirect("/login");
 
-  const logs = await getAuditLogs((session as any).accessToken);
+  const logs = await getAuditLogs((session as { accessToken?: string }).accessToken);
 
   return (
     <div className="space-y-6">
@@ -41,7 +41,7 @@ export default async function AdminAuditPage() {
             </tr>
           </thead>
           <tbody className="divide-y divide-white/10">
-            {logs.map((log: any) => (
+            {logs.map((log: Record<string, unknown>) => (
               <tr key={log.id} className="hover:bg-white/5 transition-colors">
                 <td className="px-6 py-4 whitespace-nowrap">
                   <div className="flex items-center gap-2 text-xs">

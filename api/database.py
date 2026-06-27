@@ -1,3 +1,6 @@
+from auth import get_current_user, User
+from fastapi import Depends, HTTPException
+from psycopg2.pool import ThreadedConnectionPool
 import os
 import psycopg2
 from psycopg2.extras import DictCursor
@@ -12,11 +15,8 @@ if not DATABASE_URL:
     raise RuntimeError("DATABASE_URL environment variable is not set")
 
 
-from psycopg2.pool import ThreadedConnectionPool
-from fastapi import Depends, HTTPException
-from auth import get_current_user, User
+db_pool = None
 
-db_pool = ThreadedConnectionPool(1, 20, dsn=DATABASE_URL)
 
 class PooledConnectionWrapper:
     def __init__(self, conn, pool):
@@ -32,7 +32,7 @@ class PooledConnectionWrapper:
             self._conn.__exit__(exc_type, exc_val, exc_tb)
         finally:
             self._pool.putconn(self._conn)
-            self._conn = None # Prevent double put
+            self._conn = None  # Prevent double put
 
     def cursor(self, *args, **kwargs):
         return self._conn.cursor(*args, **kwargs)
@@ -48,7 +48,11 @@ class PooledConnectionWrapper:
             self._pool.putconn(self._conn)
             self._conn = None
 
+
 def get_connection():
+    global db_pool
+    if db_pool is None:
+        db_pool = ThreadedConnectionPool(1, 20, dsn=DATABASE_URL)
     conn = db_pool.getconn()
     return PooledConnectionWrapper(conn, db_pool)
 
@@ -86,11 +90,11 @@ def get_or_create_user(user_id: str, email: str = None) -> dict:
             user = cur.fetchone()
             if user:
                 return dict(user)
-            
+
             cur.execute("SELECT COUNT(*) FROM users")
             count = cur.fetchone()[0]
             role = 'admin' if count == 0 else 'user'
-            
+
             # Fix 11: get_or_create_user has a TOCTOU race condition
             try:
                 cur.execute(
@@ -102,7 +106,8 @@ def get_or_create_user(user_id: str, email: str = None) -> dict:
                 return dict(new_user)
             except psycopg2.errors.UniqueViolation:
                 conn.rollback()
-                cur.execute("SELECT id, role FROM users WHERE id = %s", (user_id,))
+                cur.execute(
+                    "SELECT id, role FROM users WHERE id = %s", (user_id,))
                 return dict(cur.fetchone())
     except Exception as e:
         conn.rollback()
@@ -140,13 +145,14 @@ def enforce_retention_policy():
     finally:
         conn.close()
 
+
 def init_db():
     """Run schema.sql to ensure tables exist on startup."""
     try:
         schema_path = os.path.join(os.path.dirname(__file__), "schema.sql")
         with open(schema_path, "r") as f:
             schema_sql = f.read()
-            
+
         conn = get_connection()
         try:
             with conn.cursor() as cur:
@@ -162,6 +168,7 @@ def init_db():
     except Exception as e:
         logger.error(f"Failed to read/initialize database schema: {e}")
 
+
 async def verify_project_access(
     project_id: str,
     current_user: User = Depends(get_current_user)
@@ -170,10 +177,12 @@ async def verify_project_access(
     try:
         with conn.cursor(cursor_factory=DictCursor) as cur:
             if current_user.role == 'admin':
-                cur.execute("SELECT * FROM projects WHERE id = %s AND deleted_at IS NULL", (project_id,))
+                cur.execute(
+                    "SELECT * FROM projects WHERE id = %s AND deleted_at IS NULL", (project_id,))
                 project = cur.fetchone()
                 if not project:
-                    raise HTTPException(status_code=404, detail="Project not found")
+                    raise HTTPException(
+                        status_code=404, detail="Project not found")
                 return dict(project)
             else:
                 cur.execute("""
@@ -183,7 +192,8 @@ async def verify_project_access(
                 """, (project_id, current_user.user_id))
                 project = cur.fetchone()
                 if not project:
-                    raise HTTPException(status_code=403, detail="You do not have access to this project")
+                    raise HTTPException(
+                        status_code=403, detail="You do not have access to this project")
                 return dict(project)
     finally:
         conn.close()

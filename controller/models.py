@@ -3,11 +3,13 @@ from datetime import datetime
 from pydantic import BaseModel, Field, ConfigDict, field_serializer
 from enum import Enum
 
+
 class ProjectStatus(str, Enum):
     PROVISIONING = "Provisioning"
     READY = "Ready"
     TERMINATING = "Terminating"
     FAILED = "Failed"
+
 
 class ProjectSchema(BaseModel):
     model_config = ConfigDict(populate_by_name=True)

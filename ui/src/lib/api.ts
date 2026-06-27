@@ -29,11 +29,11 @@ async function request<T>(
   if (typeof window === "undefined") {
     const { auth } = await import("@/auth");
     const session = await auth();
-    token = (session as any)?.accessToken;
+    token = (session as { accessToken?: string })?.accessToken;
   } else {
     const { getSession } = await import("next-auth/react");
     const session = await getSession();
-    token = (session as any)?.accessToken;
+    token = (session as { accessToken?: string })?.accessToken;
   }
 
   const headers: Record<string, string> = { 
@@ -161,11 +161,11 @@ export const api = {
       if (typeof window === "undefined") {
         const { auth } = await import("@/auth");
         const session = await auth();
-        token = (session as any)?.accessToken;
+        token = (session as { accessToken?: string })?.accessToken;
       } else {
         const { getSession } = await import("next-auth/react");
         const session = await getSession();
-        token = (session as any)?.accessToken;
+        token = (session as { accessToken?: string })?.accessToken;
       }
       const headers: Record<string, string> = {};
       if (token) headers["Authorization"] = `Bearer ${token}`;

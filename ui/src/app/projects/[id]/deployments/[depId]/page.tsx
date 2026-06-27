@@ -13,7 +13,7 @@ export const dynamic = "force-dynamic";
 
 const STATE_STEPS = ["Queued", "Building", "Deploying", "Verifying", "Running"];
 
-function Pipeline({ state, builds }: { state: string, builds: any[] }) {
+function Pipeline({ state, builds }: { state: string, builds: Record<string, unknown>[] }) {
   const isFailed = state === "Failed" || state === "DLQ";
   
   let failIndex = -1;
@@ -78,7 +78,7 @@ export default async function DeploymentPage({ params }: { params: { id: string;
   catch { notFound(); }
 
   const session = await auth();
-  const token = (session as any)?.accessToken;
+  const token = (session as { accessToken?: string })?.accessToken;
 
   const [builds, auditLogs] = await Promise.allSettled([
     api.builds.list(params.id, params.depId),

@@ -1,28 +1,96 @@
-# ShipZen — Production Internal Developer Platform (IDP)
+# ShipZen
 
-ShipZen is an enterprise-grade Internal Developer Platform built from scratch to orchestrate Kubernetes deployments seamlessly. 
+**ShipZen** is an enterprise-grade Internal Developer Platform (IDP) designed to orchestrate and automate Kubernetes deployments seamlessly. It provides a "Heroku-like" developer experience on top of raw Kubernetes primitives, utilizing Cloud Native Buildpacks, dynamic Gateway API routing, and state machine-driven asynchronous job execution.
 
-The platform features strict multi-tenant isolation, native Cloud Native Buildpacks (with Kaniko fallback), an asynchronous Python Controller polling PostgreSQL for state reconciliation, and Envoy Gateway for host-based routing.
+## Executive Summary
 
-## 🚀 GitHub Actions Configuration
+ShipZen empowers development teams to deploy source code directly to a secure, isolated Kubernetes environment without writing `Dockerfiles` or YAML manifests. 
 
-Before running the GitHub Actions deployment pipeline, you **must** configure the following **Repository Secrets** in your GitHub repository settings (`Settings > Secrets and variables > Actions`):
+### Key Features
+- **Zero-Config Deployments**: Automatic runtime detection and rootless container building via Cloud Native Buildpacks (CNB).
+- **Asynchronous Orchestration**: Python-based Worker daemon leveraging Redis Streams for robust, fault-tolerant build pipelines.
+- **Continuous Reconciliation**: A custom Python Controller continuously reconciles desired state stored in PostgreSQL against active Kubernetes resources.
+- **Dynamic Routing**: Managed via Kubernetes Gateway API (Envoy Gateway), providing automatic TLS termination and strict host-based routing per deployment.
+- **Deep Observability**: Out-of-the-box integration with the `kube-prometheus-stack` for Prometheus metrics, Grafana dashboards, and pod-level logs.
+- **Multi-Tenant Isolation**: Each project executes within a strictly isolated Kubernetes namespace.
 
-### Required AWS Secrets
-- `AWS_ACCOUNT_ID`: Your 12-digit AWS account ID.
-- `AWS_REGION`: The target AWS region (e.g., `us-east-1`).
-- `AWS_ROLE_ARN`: The ARN of the IAM Role configured for GitHub Actions OIDC federation. This role must have permissions to push to ECR and deploy manifests to EKS.
+### Technology Stack
+- **Frontend**: Next.js 14, Tailwind CSS, TypeScript
+- **Backend / Workers**: Python, FastAPI, Psycopg2, Redis
+- **Infrastructure**: Terraform, Amazon EKS (Kubernetes 1.30+), Karpenter (Auto-scaling)
+- **Networking**: Envoy Gateway API, ExternalDNS, cert-manager
+- **Observability**: Prometheus, Grafana, Node Exporter
 
-### Required Infrastructure Configuration
-- `EKS_CLUSTER_NAME`: The name of the target EKS cluster.
-- `POSTGRES_PASSWORD`: The initial password for the PostgreSQL master user.
-- `REDIS_PASSWORD`: The initial password for the Redis cluster.
+---
 
-## 🏗️ Architecture
+## Architecture Overview
 
-- **Worker (`worker/`):** Asynchronous Python daemon handling Redis Streams to orchestrate deployment tasks.
-- **Builder (`builder/`):** Autoscaling pool using Cloud Native Buildpacks (`pack`) for rootless container generation, streaming logs directly to S3.
-- **Controller (`controller/`):** Python-based continuous Reconciliation Engine resolving drift against PostgreSQL desired state.
-- **Gateway (Envoy Gateway):** Managed via ArgoCD, providing strict TLS-terminated wildcard host routing.
+1. **API Server (`api/`)**: FastAPI REST interface handling authentication, webhooks, and state mutations.
+2. **Worker (`worker/`)**: Background daemon consuming Redis streams. Handles repository cloning, Buildpack manifest generation, and Kubernetes Job orchestration.
+3. **Controller (`controller/`)**: Reconciliation loop. Watches PostgreSQL for desired deployment states and translates them into raw Kubernetes Deployments, Services, and HTTPRoutes.
+4. **Next.js UI (`ui/`)**: A sleek, modern dashboard providing a real-time view into the deployment state machine, build logs, and platform health.
 
-For deeper technical specifics, Threat Models, and Architecture Diagrams, please consult the `docs/` directory.
+---
+
+## Local Development Setup
+
+To run ShipZen locally or execute the test suite, ensure your machine meets the prerequisites.
+
+### Prerequisites
+- Python 3.14+
+- Node.js 20+
+- `pytest`, `flake8`
+- (Optional) Docker for local Testcontainers execution
+
+### 1. UI Development
+The ShipZen frontend is a Next.js application located in `ui/`.
+```bash
+cd ui
+npm install
+npm run dev
+```
+
+### 2. Python Backend & Workers
+The backend consists of the `api`, `worker`, and `controller` modules. 
+
+#### Environment Setup
+```bash
+python -m venv venv
+# Windows: venv\Scripts\activate | Mac/Linux: source venv/bin/activate
+pip install -r api/requirements.txt
+pip install -r worker/requirements.txt
+pip install -r controller/requirements.txt
+pip install -r tests/requirements.txt
+```
+
+#### Running Tests
+ShipZen uses `pytest` for unit and integration testing. The test suite is configured to gracefully skip tests requiring a live Docker daemon if one is not present.
+
+```bash
+pytest tests/
+```
+
+#### Linting and Code Quality
+We enforce PEP8 standards and strict ESLint rules to maintain a production-ready codebase.
+```bash
+# Python
+flake8 api/ worker/ controller/
+
+# Next.js
+npm run lint --prefix ui
+```
+
+---
+
+## Infrastructure and Deployment
+
+ShipZen's infrastructure is fully codified using Terraform, located in the `terraform/` directory.
+
+### Quick Start (AWS EKS)
+```bash
+cd terraform
+terraform init
+terraform apply -var="aws_region=us-east-1"
+```
+
+*Note: Production deployments require configuring GitHub Actions OIDC federation and AWS IAM roles. See the `docs/` folder for comprehensive operational runbooks and Threat Models.*

@@ -6,6 +6,18 @@ import os
 import threading
 import psycopg2
 
+import docker
+
+def is_docker_running():
+    try:
+        client = docker.from_env()
+        client.ping()
+        return True
+    except Exception:
+        return False
+
+pytestmark = pytest.mark.skipif(not is_docker_running(), reason="Docker daemon is not running")
+
 # Set test environment variables BEFORE importing application code
 os.environ["S3_LOG_BUCKET"] = "test-bucket"
 os.environ["STREAM_NAME"] = "test_stream"

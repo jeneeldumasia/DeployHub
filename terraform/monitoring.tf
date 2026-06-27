@@ -4,6 +4,15 @@
 # PrometheusRule and ServiceMonitor CRDs are installed by this chart,
 # which activates all resources in observability/.
 
+resource "random_password" "grafana_password" {
+  length  = 32
+  special = false
+}
+
+locals {
+  grafana_password = var.grafana_password != "" ? var.grafana_password : random_password.grafana_password.result
+}
+
 resource "kubernetes_namespace" "observability" {
   metadata {
     name = "observability"
@@ -74,7 +83,7 @@ resource "helm_release" "kube_prometheus_stack" {
   # Use env var for password to avoid .ini parser breaking on special characters like # or ;
   set {
     name  = "grafana.env.GF_DATABASE_PASSWORD"
-    value = var.pg_password != "" ? var.pg_password : "shipzen-secret-change-me"
+    value = local.pg_password
   }
 
   set {
@@ -90,7 +99,7 @@ resource "helm_release" "kube_prometheus_stack" {
   # Grafana admin password — change before exposing externally
   set {
     name  = "grafana.adminPassword"
-    value = var.grafana_password != "" ? var.grafana_password : "shipzen-grafana"
+    value = local.grafana_password
   }
 
   set {

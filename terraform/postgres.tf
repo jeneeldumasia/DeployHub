@@ -1,7 +1,13 @@
+resource "random_password" "pg_password" {
+  length           = 32
+  special          = true
+  override_special = "!#%&*()-_=+[]{}<>:?"
+}
+
 locals {
   pg_database = "shipzen"
   pg_username = "shipzen"
-  pg_password = "shipzen-secret-change-me"  # Overridden by var.pg_password in prod
+  pg_password = var.pg_password != "" ? var.pg_password : random_password.pg_password.result
   pg_host     = "postgres-postgresql.shipzen-system.svc.cluster.local"
   pg_port     = 5432
 }
@@ -43,12 +49,12 @@ resource "helm_release" "postgresql" {
 
   set {
     name  = "auth.password"
-    value = var.pg_password != "" ? var.pg_password : local.pg_password
+    value = local.pg_password
   }
 
   set {
     name  = "auth.postgresPassword"
-    value = var.pg_password != "" ? var.pg_password : local.pg_password
+    value = local.pg_password
   }
 
   set {
@@ -91,7 +97,7 @@ resource "kubernetes_secret" "db_credentials" {
   }
 
   data = {
-    url = "postgresql://${local.pg_username}:${replace(var.pg_password != "" ? var.pg_password : local.pg_password, "@", "%40")}@${local.pg_host}:${local.pg_port}/${local.pg_database}"
+    url = "postgresql://${local.pg_username}:${replace(local.pg_password, "@", "%40")}@${local.pg_host}:${local.pg_port}/${local.pg_database}"
   }
 
   depends_on = [helm_release.postgresql]
@@ -136,7 +142,7 @@ resource "kubernetes_secret" "db_credentials_build" {
   }
 
   data = {
-    url = "postgresql://${local.pg_username}:${replace(var.pg_password != "" ? var.pg_password : local.pg_password, "@", "%40")}@${local.pg_host}:${local.pg_port}/${local.pg_database}"
+    url = "postgresql://${local.pg_username}:${replace(local.pg_password, "@", "%40")}@${local.pg_host}:${local.pg_port}/${local.pg_database}"
   }
 
   depends_on = [helm_release.postgresql, kubernetes_namespace.shipzen_build]

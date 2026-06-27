@@ -5,6 +5,7 @@ All state-changing operations write to PostgreSQL and enqueue to Redis.
 The controller and worker drive everything asynchronously from there.
 """
 
+from typing import Literal
 import os
 import re
 import time
@@ -34,13 +35,15 @@ from contextlib import asynccontextmanager
 from audit import log_audit_event
 from auth import get_current_user, User
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+logging.basicConfig(level=logging.INFO,
+                    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger('api')
 
 # ── Config ────────────────────────────────────────────────────────────────────
 
-REDIS_HOST  = os.getenv("REDIS_HOST", "redis-master.shipzen-system.svc.cluster.local")
-REDIS_PORT  = int(os.getenv("REDIS_PORT", "6379"))
+REDIS_HOST = os.getenv(
+    "REDIS_HOST", "redis-master.shipzen-system.svc.cluster.local")
+REDIS_PORT = int(os.getenv("REDIS_PORT", "6379"))
 STREAM_NAME = os.getenv("STREAM_NAME", "deploy_stream")
 
 # ECR repository URL — injected by Terraform at deploy time.
@@ -60,10 +63,12 @@ _NAMESPACE_RE = re.compile(r'^[a-z0-9][a-z0-9\-]{1,61}[a-z0-9]$')
 
 # ── Redis client ──────────────────────────────────────────────────────────────
 
+
 def get_redis() -> redis_lib.Redis:
     return redis_lib.Redis(host=REDIS_HOST, port=REDIS_PORT, decode_responses=True)
 
 # ── FastAPI app ───────────────────────────────────────────────────────────────
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -76,6 +81,7 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan,
 )
+
 
 def _user_id_or_ip(request: Request) -> str:
     # Use Authorization header sub if present, fallback to IP
@@ -92,6 +98,7 @@ def _user_id_or_ip(request: Request) -> str:
         except Exception:
             pass
     return get_remote_address(request)
+
 
 limiter = Limiter(key_func=_user_id_or_ip)
 app.state.limiter = limiter
@@ -115,6 +122,7 @@ app.add_middleware(
 
 # ── Request / Response models ─────────────────────────────────────────────────
 
+
 class CreateProjectRequest(BaseModel):
     name: str
     namespace: str
@@ -129,8 +137,11 @@ class CreateProjectRequest(BaseModel):
             )
         return v
 
+
 class InstallWebhookRequest(BaseModel):
     repo_url: str
+
+
 class CreateDeploymentRequest(BaseModel):
     repo_url: str
     port: Optional[int] = 8080
@@ -154,6 +165,7 @@ class CreateDeploymentRequest(BaseModel):
 
 # ── Health ────────────────────────────────────────────────────────────────────
 
+
 @app.get("/healthz", tags=["Health"])
 @limiter.limit("100/minute")
 def healthz(request: Request):
@@ -161,6 +173,7 @@ def healthz(request: Request):
     return {"status": "ok"}
 
 # ── Projects ──────────────────────────────────────────────────────────────────
+
 
 @app.post("/projects", status_code=201, tags=["Projects"])
 @limiter.limit("10/minute")
@@ -180,18 +193,20 @@ def create_project(request: Request, body: CreateProjectRequest, current_user: U
                     VALUES (%s, %s, %s, %s, 'Provisioning', %s)
                     RETURNING *;
                     """,
-                    (project_id, current_user.user_id, body.name, body.namespace, webhook_secret),
+                    (project_id, current_user.user_id,
+                     body.name, body.namespace, webhook_secret),
                 )
                 project = dict(cur.fetchone())
-                
+
                 cur.execute(
                     "INSERT INTO project_members (project_id, user_id, role) VALUES (%s, %s, 'owner')",
                     (project_id, current_user.user_id)
                 )
-                
+
             conn.commit()
     except psycopg2.errors.UniqueViolation:
-        raise HTTPException(status_code=409, detail="A project with this ID already exists")
+        raise HTTPException(
+            status_code=409, detail="A project with this ID already exists")
     except Exception as e:
         logger.error(f"Failed to create project: {e}")
         raise HTTPException(status_code=500, detail="Failed to create project")
@@ -247,10 +262,12 @@ def delete_project(request: Request, project_id: str, project: dict = Depends(ve
     if current_user.role != 'admin':
         with get_connection() as conn:
             with conn.cursor() as cur:
-                cur.execute("SELECT role FROM project_members WHERE project_id = %s AND user_id = %s;", (project_id, current_user.user_id))
+                cur.execute("SELECT role FROM project_members WHERE project_id = %s AND user_id = %s;",
+                            (project_id, current_user.user_id))
                 member = cur.fetchone()
                 if not member or member[0] != 'owner':
-                    raise HTTPException(status_code=403, detail="Only project owners can delete projects")
+                    raise HTTPException(
+                        status_code=403, detail="Only project owners can delete projects")
 
     try:
         with get_connection() as conn:
@@ -274,18 +291,18 @@ def delete_project(request: Request, project_id: str, project: dict = Depends(ve
     )
     return {"message": f"Project {project_id} marked for termination"}
 
-from typing import Literal
 
 class AddMemberRequest(BaseModel):
     email: str
     role: Literal['editor', 'viewer']
 
+
 @app.get("/projects/{project_id}/members", tags=["Members"])
 @limiter.limit("100/minute")
 def list_project_members(
-    request: Request, 
-    project_id: str, 
-    project: dict = Depends(verify_project_access), 
+    request: Request,
+    project_id: str,
+    project: dict = Depends(verify_project_access),
     current_user: User = Depends(get_current_user)
 ):
     try:
@@ -293,10 +310,12 @@ def list_project_members(
             with conn.cursor(cursor_factory=DictCursor) as cur:
                 # Enforce owner/admin requirement
                 if current_user.role != 'admin':
-                    cur.execute("SELECT role FROM project_members WHERE project_id = %s AND user_id = %s;", (project_id, current_user.user_id))
+                    cur.execute("SELECT role FROM project_members WHERE project_id = %s AND user_id = %s;", (
+                        project_id, current_user.user_id))
                     caller_member = cur.fetchone()
                     if not caller_member or caller_member['role'] != 'owner':
-                        raise HTTPException(status_code=403, detail="Only project owners can manage members")
+                        raise HTTPException(
+                            status_code=403, detail="Only project owners can manage members")
 
                 cur.execute("""
                     SELECT u.id as user_id, u.email, pm.role, pm.created_at 
@@ -310,28 +329,33 @@ def list_project_members(
         raise
     except Exception as e:
         logger.error(f"Failed to list members: {e}")
-        raise HTTPException(status_code=500, detail="Failed to list project members")
+        raise HTTPException(
+            status_code=500, detail="Failed to list project members")
+
 
 @app.post("/projects/{project_id}/members", status_code=201, tags=["Members"])
 @limiter.limit("20/minute")
 def add_project_member(
-    request: Request, 
-    project_id: str, 
-    body: AddMemberRequest, 
-    project: dict = Depends(verify_project_access), 
+    request: Request,
+    project_id: str,
+    body: AddMemberRequest,
+    project: dict = Depends(verify_project_access),
     current_user: User = Depends(get_current_user)
 ):
     with get_connection() as conn:
         with conn.cursor(cursor_factory=DictCursor) as cur:
             # Enforce owner/admin requirement
             if current_user.role != 'admin':
-                cur.execute("SELECT role FROM project_members WHERE project_id = %s AND user_id = %s;", (project_id, current_user.user_id))
+                cur.execute("SELECT role FROM project_members WHERE project_id = %s AND user_id = %s;",
+                            (project_id, current_user.user_id))
                 caller_member = cur.fetchone()
                 if not caller_member or caller_member['role'] != 'owner':
-                    raise HTTPException(status_code=403, detail="Only project owners can manage members")
+                    raise HTTPException(
+                        status_code=403, detail="Only project owners can manage members")
 
             # Find user by email
-            cur.execute("SELECT id, email FROM users WHERE email = %s;", (body.email,))
+            cur.execute(
+                "SELECT id, email FROM users WHERE email = %s;", (body.email,))
             target_user = cur.fetchone()
             if not target_user:
                 raise HTTPException(status_code=404, detail="User not found")
@@ -351,45 +375,55 @@ def add_project_member(
                 })
             except psycopg2.errors.UniqueViolation:
                 conn.rollback()
-                raise HTTPException(status_code=409, detail="User is already a member of this project")
+                raise HTTPException(
+                    status_code=409, detail="User is already a member of this project")
+
 
 @app.delete("/projects/{project_id}/members/{target_user_id}", tags=["Members"])
 @limiter.limit("20/minute")
 def remove_project_member(
-    request: Request, 
-    project_id: str, 
-    target_user_id: str, 
-    project: dict = Depends(verify_project_access), 
+    request: Request,
+    project_id: str,
+    target_user_id: str,
+    project: dict = Depends(verify_project_access),
     current_user: User = Depends(get_current_user)
 ):
     if target_user_id == current_user.user_id:
-        raise HTTPException(status_code=403, detail="Cannot remove yourself from a project")
+        raise HTTPException(
+            status_code=403, detail="Cannot remove yourself from a project")
 
     with get_connection() as conn:
         with conn.cursor(cursor_factory=DictCursor) as cur:
             # Enforce owner/admin requirement
             if current_user.role != 'admin':
-                cur.execute("SELECT role FROM project_members WHERE project_id = %s AND user_id = %s;", (project_id, current_user.user_id))
+                cur.execute("SELECT role FROM project_members WHERE project_id = %s AND user_id = %s;",
+                            (project_id, current_user.user_id))
                 caller_member = cur.fetchone()
                 if not caller_member or caller_member['role'] != 'owner':
-                    raise HTTPException(status_code=403, detail="Only project owners can manage members")
+                    raise HTTPException(
+                        status_code=403, detail="Only project owners can manage members")
 
-            cur.execute("SELECT role FROM project_members WHERE project_id = %s AND user_id = %s;", (project_id, target_user_id))
+            cur.execute("SELECT role FROM project_members WHERE project_id = %s AND user_id = %s;",
+                        (project_id, target_user_id))
             target_member = cur.fetchone()
-            
+
             if not target_member:
                 raise HTTPException(status_code=404, detail="Member not found")
-                
-            if target_member['role'] == 'owner':
-                raise HTTPException(status_code=403, detail="Cannot remove the project owner")
 
-            cur.execute("DELETE FROM project_members WHERE project_id = %s AND user_id = %s;", (project_id, target_user_id))
+            if target_member['role'] == 'owner':
+                raise HTTPException(
+                    status_code=403, detail="Cannot remove the project owner")
+
+            cur.execute("DELETE FROM project_members WHERE project_id = %s AND user_id = %s;",
+                        (project_id, target_user_id))
             conn.commit()
             return {"message": "Member removed"}
+
 
 class AnalyzeRequest(BaseModel):
     repo_url: str
     branch: str = "main"
+
 
 @app.post("/projects/analyze", tags=["Projects"])
 @limiter.limit("5/minute")
@@ -398,28 +432,32 @@ def analyze_repo(request: Request, body: AnalyzeRequest, current_user: User = De
     import tempfile
     import subprocess
     from analyzer import RepoAnalyzer
-    
+
     # Fix 4: Validate branch name to prevent shell injection
     if not re.match(r'^[a-zA-Z0-9_.-]{1,100}$', body.branch):
         raise HTTPException(status_code=400, detail="Invalid branch name")
-        
+
     try:
         # Fix 4: Move TemporaryDirectory inside try
         with tempfile.TemporaryDirectory() as tmpdir:
             # Fix 4: timeout=60, capture_output=True
             subprocess.run(
-                ["git", "clone", "--depth", "1", "-b", body.branch, body.repo_url, tmpdir],
+                ["git", "clone", "--depth", "1", "-b",
+                    body.branch, body.repo_url, tmpdir],
                 check=True, capture_output=True, timeout=60
             )
-            analyzer = RepoAnalyzer(repo_path=tmpdir, repo_name=body.repo_url.split('/')[-1].replace('.git', ''))
+            analyzer = RepoAnalyzer(
+                repo_path=tmpdir, repo_name=body.repo_url.split('/')[-1].replace('.git', ''))
             services = analyzer.analyze()
     except Exception as e:
         logger.error(f"Failed to clone repo for analysis: {e}")
-        raise HTTPException(status_code=400, detail="Failed to clone repository")
-        
+        raise HTTPException(
+            status_code=400, detail="Failed to clone repository")
+
     return {"services": [s.__dict__ for s in services]}
 
 # ── Deployments ───────────────────────────────────────────────────────────────
+
 
 @app.post("/projects/{project_id}/deployments", status_code=202, tags=["Deployments"])
 @limiter.limit("5/minute")
@@ -471,7 +509,8 @@ def create_deployment(request: Request, project_id: str, body: CreateDeploymentR
             conn.commit()
     except Exception as e:
         logger.error(f"Failed to create deployment: {e}")
-        raise HTTPException(status_code=500, detail="Failed to create deployment")
+        raise HTTPException(
+            status_code=500, detail="Failed to create deployment")
 
     # Enqueue to Redis stream — worker picks this up and hands off to builder
     try:
@@ -497,7 +536,8 @@ def create_deployment(request: Request, project_id: str, body: CreateDeploymentR
                 conn.commit()
         except Exception:
             pass
-        raise HTTPException(status_code=500, detail="Failed to enqueue deployment")
+        raise HTTPException(
+            status_code=500, detail="Failed to enqueue deployment")
 
     log_audit_event(
         project_id=project_id,
@@ -514,7 +554,7 @@ def create_deployment(request: Request, project_id: str, body: CreateDeploymentR
 @limiter.limit("5/minute")
 def rollback_deployment(request: Request, project_id: str, project: dict = Depends(verify_project_access), current_user: User = Depends(get_current_user)):
     """Re-deploy the last known-good image without rebuilding."""
-    
+
     with get_connection() as conn:
         with conn.cursor(cursor_factory=DictCursor) as cur:
             # Find the last successful deployment
@@ -524,10 +564,11 @@ def rollback_deployment(request: Request, project_id: str, project: dict = Depen
                 ORDER BY updated_at DESC LIMIT 1;
             """, (project_id,))
             last_good = cur.fetchone()
-            
+
             if not last_good:
-                raise HTTPException(status_code=409, detail="No previous successful deployment found to rollback to.")
-                
+                raise HTTPException(
+                    status_code=409, detail="No previous successful deployment found to rollback to.")
+
             deployment_id = str(uuid.uuid4())
             cur.execute("""
                 INSERT INTO deployments
@@ -535,12 +576,12 @@ def rollback_deployment(request: Request, project_id: str, project: dict = Depen
                 VALUES (%s, %s, %s, %s, %s, %s, 'Queued')
                 RETURNING *;
             """, (
-                deployment_id, project_id, last_good['repo_url'], 
+                deployment_id, project_id, last_good['repo_url'],
                 last_good['image_uri'], last_good['replicas'], last_good['port']
             ))
             cur.fetchone()
         conn.commit()
-        
+
     # Publish state update to Redis
     try:
         r = get_redis()
@@ -555,10 +596,11 @@ def rollback_deployment(request: Request, project_id: str, project: dict = Depen
             "retries":       "0",
             "is_rollback":   "true",
         })
-        r.publish(f"shipzen:status:{deployment_id}", json.dumps({"state": "Queued", "last_error": None}))
+        r.publish(f"shipzen:status:{deployment_id}", json.dumps(
+            {"state": "Queued", "last_error": None}))
     except Exception as e:
         logger.warning(f"Failed to publish status to Redis: {e}")
-        
+
     log_audit_event(
         project_id=project_id,
         user_id=current_user.user_id,
@@ -576,7 +618,8 @@ def list_deployments(
     request: Request,
     project_id: str,
     limit: int = Query(default=20, ge=1, le=100),
-    cursor: Optional[str] = Query(default=None, description="cursor format: <updated_at>|<deployment_id>"),
+    cursor: Optional[str] = Query(
+        default=None, description="cursor format: <updated_at>|<deployment_id>"),
     project: dict = Depends(verify_project_access),
 ):
     """
@@ -597,7 +640,8 @@ def list_deployments(
             query += " AND (updated_at, deployment_id) < (%s, %s)"
             params.extend([cursor_updated_at, cursor_deployment_id])
         except ValueError:
-            raise HTTPException(status_code=400, detail="Invalid cursor format")
+            raise HTTPException(
+                status_code=400, detail="Invalid cursor format")
 
     query += " ORDER BY updated_at DESC, deployment_id DESC LIMIT %s;"
     params.append(limit)
@@ -609,7 +653,8 @@ def list_deployments(
                 return [_serialize(dict(r)) for r in cur.fetchall()]
     except Exception as e:
         logger.error(f"Failed to list deployments: {e}")
-        raise HTTPException(status_code=500, detail="Failed to list deployments")
+        raise HTTPException(
+            status_code=500, detail="Failed to list deployments")
 
 
 @app.get("/projects/{project_id}/deployments/{deployment_id}", tags=["Deployments"])
@@ -618,6 +663,7 @@ def get_deployment(request: Request, project_id: str, deployment_id: str, projec
     """Get a single deployment by ID."""
     deployment = _get_deployment_or_404(project_id, deployment_id)
     return _serialize(deployment)
+
 
 @app.websocket("/ws/projects/{project_id}/deployments/{deployment_id}/status")
 async def websocket_deployment_status(websocket: WebSocket, project_id: str, deployment_id: str, token: str = Query(None)):
@@ -630,9 +676,9 @@ async def websocket_deployment_status(websocket: WebSocket, project_id: str, dep
     except Exception:
         await websocket.close(code=1008)
         return
-    
+
     await websocket.accept()
-    
+
     import redis.asyncio as aioredis
     import asyncio
     r = aioredis.Redis(host=REDIS_HOST, port=REDIS_PORT, decode_responses=True)
@@ -652,7 +698,7 @@ async def websocket_deployment_status(websocket: WebSocket, project_id: str, dep
         row = await asyncio.to_thread(fetch_initial)
         if row:
             await websocket.send_json({"state": row['state'], "last_error": row['last_error']})
-            
+
         async for message in pubsub.listen():
             if message["type"] == "message":
                 data = json.loads(message["data"])
@@ -670,10 +716,10 @@ async def websocket_deployment_status(websocket: WebSocket, project_id: str, dep
 
 @app.get("/projects/{project_id}/deployments/{deployment_id}/logs/stream", tags=["Deployments"])
 async def stream_logs(project_id: str, deployment_id: str, project: dict = Depends(verify_project_access)):
-    
+
     import redis.asyncio as aioredis
     r = aioredis.Redis(host=REDIS_HOST, port=REDIS_PORT, decode_responses=True)
-    
+
     async def event_stream():
         pubsub = r.pubsub()
         await pubsub.subscribe(f"shipzen:logs:{deployment_id}")
@@ -686,8 +732,8 @@ async def stream_logs(project_id: str, deployment_id: str, project: dict = Depen
             await r.aclose()
 
     return StreamingResponse(
-        event_stream(), 
-        media_type="text/event-stream", 
+        event_stream(),
+        media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "Connection": "keep-alive"}
     )
 
@@ -745,6 +791,7 @@ async def websocket_deployment_logs(
 
 # ── Builds ────────────────────────────────────────────────────────────────────
 
+
 @app.get("/projects/{project_id}/deployments/{deployment_id}/builds", tags=["Builds"])
 @limiter.limit("100/minute")
 def list_builds(request: Request, project_id: str, deployment_id: str, project: dict = Depends(verify_project_access)):
@@ -768,6 +815,7 @@ def list_builds(request: Request, project_id: str, deployment_id: str, project: 
         logger.error(f"Failed to list builds: {e}")
         raise HTTPException(status_code=500, detail="Failed to list builds")
 
+
 @app.get("/projects/{project_id}/deployments/{deployment_id}/builds/{build_id}/logs", tags=["Builds"])
 @limiter.limit("100/minute")
 def get_build_logs(request: Request, project_id: str, deployment_id: str, build_id: str, project: dict = Depends(verify_project_access)):
@@ -783,29 +831,34 @@ def get_build_logs(request: Request, project_id: str, deployment_id: str, build_
                 )
                 row = cur.fetchone()
                 if not row or not row["s3_log_uri"]:
-                    raise HTTPException(status_code=404, detail="Log not found")
+                    raise HTTPException(
+                        status_code=404, detail="Log not found")
 
                 s3_uri = row["s3_log_uri"]
                 if not s3_uri.startswith("s3://"):
-                    raise HTTPException(status_code=400, detail="Invalid log URI")
+                    raise HTTPException(
+                        status_code=400, detail="Invalid log URI")
 
                 bucket = s3_uri.split("/")[2]
                 key = "/".join(s3_uri.split("/")[3:])
 
                 if not bucket:
-                    raise HTTPException(status_code=404, detail="Log storage not configured")
+                    raise HTTPException(
+                        status_code=404, detail="Log storage not configured")
 
                 s3 = boto3.client('s3')
                 try:
                     obj = s3.get_object(Bucket=bucket, Key=key)
                 except s3.exceptions.NoSuchKey:
-                    raise HTTPException(status_code=404, detail="Log file not found in S3")
+                    raise HTTPException(
+                        status_code=404, detail="Log file not found in S3")
 
                 content = obj['Body'].read()
                 return Response(
                     content=content,
                     media_type="text/plain",
-                    headers={"Content-Disposition": f"inline; filename=build-{build_id[:8]}.log"}
+                    headers={
+                        "Content-Disposition": f"inline; filename=build-{build_id[:8]}.log"}
                 )
     except HTTPException:
         raise
@@ -814,6 +867,7 @@ def get_build_logs(request: Request, project_id: str, deployment_id: str, build_
         raise HTTPException(status_code=500, detail="Failed to get logs")
 
 # ── Audit ─────────────────────────────────────────────────────────────────────
+
 
 @app.get("/projects/{project_id}/audit", tags=["Audit"])
 @limiter.limit("100/minute")
@@ -840,7 +894,9 @@ def get_audit_logs(
                 return [_serialize(dict(r)) for r in cur.fetchall()]
     except Exception as e:
         logger.error(f"Failed to fetch audit logs: {e}")
-        raise HTTPException(status_code=500, detail="Failed to fetch audit logs")
+        raise HTTPException(
+            status_code=500, detail="Failed to fetch audit logs")
+
 
 @app.get("/audit", tags=["Audit"])
 @limiter.limit("100/minute")
@@ -877,9 +933,11 @@ def get_global_audit_logs(
                 return [_serialize(dict(r)) for r in cur.fetchall()]
     except Exception as e:
         logger.error(f"Failed to fetch global audit logs: {e}")
-        raise HTTPException(status_code=500, detail="Failed to fetch audit logs")
+        raise HTTPException(
+            status_code=500, detail="Failed to fetch audit logs")
 
 # ── Env Vars ──────────────────────────────────────────────────────────────────
+
 
 @app.get("/projects/{project_id}/env", tags=["Environment"])
 @limiter.limit("100/minute")
@@ -899,6 +957,7 @@ def get_env_vars(request: Request, project_id: str, project: dict = Depends(veri
         logger.error(f"Failed to fetch env vars for {project_id}: {e}")
         raise HTTPException(status_code=500, detail="Failed to fetch env vars")
 
+
 @app.put("/projects/{project_id}/env", tags=["Environment"])
 @limiter.limit("20/minute")
 def put_env_var(request: Request, project_id: str, body: dict, project: dict = Depends(verify_project_access), current_user: User = Depends(get_current_user)):
@@ -907,26 +966,28 @@ def put_env_var(request: Request, project_id: str, body: dict, project: dict = D
     value = body.get("value")
     if not key or not value:
         raise HTTPException(status_code=400, detail="Missing key or value")
-        
+
     # Fix 6: Use project['id'] instead of name to avoid collision
     secret_id = f"shipzen/project/{project['id']}"
     sm = boto3.client('secretsmanager')
     import json
-    
+
     try:
         try:
             res = sm.get_secret_value(SecretId=secret_id)
             secret_dict = json.loads(res.get('SecretString', '{}'))
         except sm.exceptions.ResourceNotFoundException:
             secret_dict = {}
-            
+
         secret_dict[key] = value
-        
+
         try:
-            sm.update_secret(SecretId=secret_id, SecretString=json.dumps(secret_dict))
+            sm.update_secret(SecretId=secret_id,
+                             SecretString=json.dumps(secret_dict))
         except sm.exceptions.ResourceNotFoundException:
-            sm.create_secret(Name=secret_id, SecretString=json.dumps(secret_dict))
-            
+            sm.create_secret(
+                Name=secret_id, SecretString=json.dumps(secret_dict))
+
         log_audit_event(
             project_id=project_id,
             user_id=current_user.user_id,
@@ -940,6 +1001,7 @@ def put_env_var(request: Request, project_id: str, body: dict, project: dict = D
         logger.error(f"Failed to update env var for {project_id}: {e}")
         raise HTTPException(status_code=500, detail="Failed to update env var")
 
+
 @app.delete("/projects/{project_id}/env/{key}", tags=["Environment"])
 @limiter.limit("20/minute")
 def delete_env_var(request: Request, project_id: str, key: str, project: dict = Depends(verify_project_access), current_user: User = Depends(get_current_user)):
@@ -947,14 +1009,15 @@ def delete_env_var(request: Request, project_id: str, key: str, project: dict = 
     secret_id = f"shipzen/project/{project['id']}"
     sm = boto3.client('secretsmanager')
     import json
-    
+
     try:
         res = sm.get_secret_value(SecretId=secret_id)
         secret_dict = json.loads(res.get('SecretString', '{}'))
         if key in secret_dict:
             del secret_dict[key]
-            sm.update_secret(SecretId=secret_id, SecretString=json.dumps(secret_dict))
-            
+            sm.update_secret(SecretId=secret_id,
+                             SecretString=json.dumps(secret_dict))
+
             log_audit_event(
                 project_id=project_id,
                 user_id=current_user.user_id,
@@ -972,29 +1035,32 @@ def delete_env_var(request: Request, project_id: str, key: str, project: dict = 
 
 # ── GitHub Helpers ──────────────────────────────────────────────────────────────
 
+
 @app.get("/github/branches", tags=["GitHub"])
 @limiter.limit("20/minute")
 def get_github_branches(request: Request, repo_url: str):
     """Fetch branches for a public Git repository using git ls-remote."""
     if not _REPO_URL_RE.match(repo_url):
         raise HTTPException(status_code=400, detail="Invalid repository URL")
-        
+
     import subprocess
     try:
         # Timeout of 10s is plenty for ls-remote
         result = subprocess.run(
-            ["git", "ls-remote", "--heads", repo_url], 
-            capture_output=True, 
-            text=True, 
+            ["git", "ls-remote", "--heads", repo_url],
+            capture_output=True,
+            text=True,
             timeout=10
         )
         if result.returncode != 0:
             # Check if it's an auth issue (private repo) or repo not found
             err = result.stderr.lower()
             if "authentication" in err or "could not read username" in err or "terminal prompts disabled" in err:
-                raise HTTPException(status_code=403, detail="Repository is private or requires authentication")
-            raise HTTPException(status_code=404, detail="Repository not found or inaccessible")
-            
+                raise HTTPException(
+                    status_code=403, detail="Repository is private or requires authentication")
+            raise HTTPException(
+                status_code=404, detail="Repository not found or inaccessible")
+
         branches = []
         for line in result.stdout.strip().split("\n"):
             if not line:
@@ -1004,11 +1070,12 @@ def get_github_branches(request: Request, repo_url: str):
                 ref = parts[1]
                 if ref.startswith("refs/heads/"):
                     branches.append(ref[len("refs/heads/"):])
-                    
+
         return {"branches": branches, "total": len(branches)}
-        
+
     except subprocess.TimeoutExpired:
-        raise HTTPException(status_code=504, detail="Request to repository timed out")
+        raise HTTPException(
+            status_code=504, detail="Request to repository timed out")
     except HTTPException:
         raise
     except Exception as e:
@@ -1017,6 +1084,7 @@ def get_github_branches(request: Request, repo_url: str):
 
 # ── Webhooks ──────────────────────────────────────────────────────────────────
 
+
 @app.post("/webhooks/github/{project_id}", tags=["Webhooks"])
 @limiter.limit("60/minute")
 async def github_webhook(request: Request, project_id: str):
@@ -1024,48 +1092,52 @@ async def github_webhook(request: Request, project_id: str):
     signature_header = request.headers.get("x-hub-signature-256")
     if not signature_header:
         raise HTTPException(status_code=400, detail="Missing signature")
-        
+
     # Fix 2: Only trigger on push events
     if request.headers.get("X-GitHub-Event") != "push":
         return JSONResponse(status_code=200, content={"message": "event ignored"})
-        
+
     try:
         with get_connection() as conn:
             with conn.cursor(cursor_factory=DictCursor) as cur:
-                cur.execute("SELECT webhook_secret FROM projects WHERE id = %s;", (project_id,))
+                cur.execute(
+                    "SELECT webhook_secret FROM projects WHERE id = %s;", (project_id,))
                 row = cur.fetchone()
                 if not row or not row["webhook_secret"]:
-                    raise HTTPException(status_code=404, detail="Webhook secret not found")
+                    raise HTTPException(
+                        status_code=404, detail="Webhook secret not found")
                 webhook_secret = row["webhook_secret"]
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Failed to get webhook secret: {e}")
         raise HTTPException(status_code=500, detail="Database error")
-        
+
     # Validation logic requires raw body
     body_bytes = await request.body()
-    expected_mac = hmac.new(webhook_secret.encode(), body_bytes, hashlib.sha256).hexdigest()
+    expected_mac = hmac.new(webhook_secret.encode(),
+                            body_bytes, hashlib.sha256).hexdigest()
     if not hmac.compare_digest(f"sha256={expected_mac}", signature_header):
         raise HTTPException(status_code=401, detail="Invalid signature")
-        
+
     import json
     try:
         payload = json.loads(body_bytes)
     except json.JSONDecodeError:
         raise HTTPException(status_code=400, detail="Invalid JSON body")
-    
+
     # Trigger deploy
     # Determine branch
     branch = "main"
     if "ref" in payload:
         branch = payload["ref"].split("/")[-1]
-    
+
     # We need repo URL
     repo_url = payload.get("repository", {}).get("clone_url")
     if not repo_url:
-        raise HTTPException(status_code=400, detail="Missing repository clone_url")
-        
+        raise HTTPException(
+            status_code=400, detail="Missing repository clone_url")
+
     deployment_id = str(uuid.uuid4())
     queued_at = str(time.time())
     if ECR_REPOSITORY_URL:
@@ -1073,7 +1145,7 @@ async def github_webhook(request: Request, project_id: str):
         image_uri = f"{base_registry}/shipzen-builds/{project_id}:{deployment_id}"
     else:
         image_uri = f"local/shipzen-builds/{project_id}:{deployment_id}"
-    
+
     try:
         with get_connection() as conn:
             with conn.cursor(cursor_factory=DictCursor) as cur:
@@ -1082,13 +1154,15 @@ async def github_webhook(request: Request, project_id: str):
                     (project_id,)
                 )
                 last_deploy = cur.fetchone()
-                
+
                 if not last_deploy:
-                    raise HTTPException(status_code=400, detail="Project has no existing deployments to inherit configuration from")
-                
+                    raise HTTPException(
+                        status_code=400, detail="Project has no existing deployments to inherit configuration from")
+
                 if last_deploy["repo_url"] != repo_url:
-                    raise HTTPException(status_code=403, detail="Webhook repository does not match project's repository")
-                    
+                    raise HTTPException(
+                        status_code=403, detail="Webhook repository does not match project's repository")
+
                 port = last_deploy["port"]
 
                 cur.execute(
@@ -1100,8 +1174,10 @@ async def github_webhook(request: Request, project_id: str):
                 )
             conn.commit()
     except Exception as e:
-        logger.error(f"Failed to process webhook DB insert for {project_id}: {e}")
-        raise HTTPException(status_code=500, detail="Failed to process webhook")
+        logger.error(
+            f"Failed to process webhook DB insert for {project_id}: {e}")
+        raise HTTPException(
+            status_code=500, detail="Failed to process webhook")
 
     # Fix 3: Separate XADD to handle stream failures without swallowing
     try:
@@ -1116,7 +1192,8 @@ async def github_webhook(request: Request, project_id: str):
             "retries":       "0",
         })
     except Exception as e:
-        logger.error(f"Failed to enqueue webhook deployment {deployment_id}: {e}")
+        logger.error(
+            f"Failed to enqueue webhook deployment {deployment_id}: {e}")
         try:
             with get_connection() as conn:
                 with conn.cursor() as cur:
@@ -1127,8 +1204,9 @@ async def github_webhook(request: Request, project_id: str):
                 conn.commit()
         except Exception:
             pass
-        raise HTTPException(status_code=500, detail="Failed to enqueue webhook deployment")
-        
+        raise HTTPException(
+            status_code=500, detail="Failed to enqueue webhook deployment")
+
     log_audit_event(
         project_id=project_id,
         user_id="webhook",
@@ -1137,8 +1215,9 @@ async def github_webhook(request: Request, project_id: str):
         resource_id=deployment_id,
         details={"repo_url": repo_url, "branch": branch},
     )
-    
+
     return {"message": "Deployment triggered", "deployment_id": deployment_id}
+
 
 @app.post("/webhooks/github-app", tags=["Webhooks"])
 @limiter.limit("120/minute")
@@ -1147,37 +1226,40 @@ async def github_app_webhook(request: Request):
     signature_header = request.headers.get("x-hub-signature-256")
     if not signature_header:
         raise HTTPException(status_code=400, detail="Missing signature")
-        
+
     if request.headers.get("X-GitHub-Event") != "push":
         return JSONResponse(status_code=200, content={"message": "event ignored"})
-        
+
     app_secret = os.getenv("GITHUB_APP_WEBHOOK_SECRET")
     if not app_secret:
         logger.error("GITHUB_APP_WEBHOOK_SECRET is not set")
-        raise HTTPException(status_code=500, detail="Server configuration error")
+        raise HTTPException(
+            status_code=500, detail="Server configuration error")
 
     body_bytes = await request.body()
-    expected_mac = hmac.new(app_secret.encode(), body_bytes, hashlib.sha256).hexdigest()
+    expected_mac = hmac.new(app_secret.encode(),
+                            body_bytes, hashlib.sha256).hexdigest()
     if not hmac.compare_digest(f"sha256={expected_mac}", signature_header):
         raise HTTPException(status_code=401, detail="Invalid signature")
-        
+
     import json
     try:
         payload = json.loads(body_bytes)
     except json.JSONDecodeError:
         raise HTTPException(status_code=400, detail="Invalid JSON body")
-    
+
     branch = "main"
     if "ref" in payload:
         branch = payload["ref"].split("/")[-1]
-    
+
     # payload['repository']['clone_url'] gives https://github.com/owner/repo.git
     # payload['repository']['html_url'] gives https://github.com/owner/repo
     repo_url = payload.get("repository", {}).get("clone_url")
     html_url = payload.get("repository", {}).get("html_url")
     if not repo_url and not html_url:
-        raise HTTPException(status_code=400, detail="Missing repository URL in payload")
-        
+        raise HTTPException(
+            status_code=400, detail="Missing repository URL in payload")
+
     # Find matching project
     try:
         with get_connection() as conn:
@@ -1193,19 +1275,21 @@ async def github_app_webhook(request: Request):
                     (repo_url, html_url)
                 )
                 last_deploy = cur.fetchone()
-                
+
                 if not last_deploy:
-                    logger.info(f"Ignored push event for {repo_url} - no matching ShipZen project found.")
+                    logger.info(
+                        f"Ignored push event for {repo_url} - no matching ShipZen project found.")
                     return JSONResponse(status_code=200, content={"message": "No matching project, event ignored"})
-                
+
                 project_id = last_deploy["project_id"]
                 port = last_deploy["port"]
                 matched_repo_url = last_deploy["repo_url"]
-                
+
     except Exception as e:
         logger.error(f"Failed to lookup project for github app webhook: {e}")
-        raise HTTPException(status_code=500, detail="Database error during project lookup")
-        
+        raise HTTPException(
+            status_code=500, detail="Database error during project lookup")
+
     deployment_id = str(uuid.uuid4())
     queued_at = str(time.time())
     if ECR_REPOSITORY_URL:
@@ -1213,7 +1297,7 @@ async def github_app_webhook(request: Request):
         image_uri = f"{base_registry}/shipzen-builds/{project_id}:{deployment_id}"
     else:
         image_uri = f"local/shipzen-builds/{project_id}:{deployment_id}"
-    
+
     try:
         with get_connection() as conn:
             with conn.cursor() as cur:
@@ -1226,8 +1310,10 @@ async def github_app_webhook(request: Request):
                 )
             conn.commit()
     except Exception as e:
-        logger.error(f"Failed to process webhook DB insert for {project_id}: {e}")
-        raise HTTPException(status_code=500, detail="Failed to process webhook")
+        logger.error(
+            f"Failed to process webhook DB insert for {project_id}: {e}")
+        raise HTTPException(
+            status_code=500, detail="Failed to process webhook")
 
     try:
         r = get_redis()
@@ -1241,21 +1327,25 @@ async def github_app_webhook(request: Request):
             "retries":       "0",
         })
     except Exception as e:
-        logger.error(f"Failed to enqueue webhook deployment {deployment_id}: {e}")
-        raise HTTPException(status_code=500, detail="Failed to enqueue webhook deployment")
-        
+        logger.error(
+            f"Failed to enqueue webhook deployment {deployment_id}: {e}")
+        raise HTTPException(
+            status_code=500, detail="Failed to enqueue webhook deployment")
+
     log_audit_event(
         project_id=project_id,
         user_id="github-app",
         action="WEBHOOK_DEPLOY",
         resource_type="deployment",
         resource_id=deployment_id,
-        details={"repo_url": matched_repo_url, "branch": branch, "via": "github-app"},
+        details={"repo_url": matched_repo_url,
+                 "branch": branch, "via": "github-app"},
     )
-    
+
     return {"message": "Deployment triggered via GitHub App", "deployment_id": deployment_id}
 
 # ── Users & Admin ─────────────────────────────────────────────────────────────
+
 
 @app.get("/users/me", tags=["Users"])
 @limiter.limit("100/minute")
@@ -1267,6 +1357,7 @@ def get_me(request: Request, current_user: User = Depends(get_current_user)):
 class UpdateRoleRequest(BaseModel):
     role: str
 
+
 @app.get("/admin/users", tags=["Admin"])
 @limiter.limit("100/minute")
 def list_users(request: Request, current_user: User = Depends(get_current_user)):
@@ -1275,7 +1366,8 @@ def list_users(request: Request, current_user: User = Depends(get_current_user))
     try:
         with get_connection() as conn:
             with conn.cursor(cursor_factory=DictCursor) as cur:
-                cur.execute("SELECT id, email, role, created_at FROM users ORDER BY created_at DESC;")
+                cur.execute(
+                    "SELECT id, email, role, created_at FROM users ORDER BY created_at DESC;")
                 return [_serialize(dict(r)) for r in cur.fetchall()]
     except Exception as e:
         logger.error(f"Failed to list users: {e}")
@@ -1288,21 +1380,24 @@ def update_user_role(request: Request, user_id: str, body: UpdateRoleRequest, cu
     if not current_user.is_admin:
         raise HTTPException(status_code=403, detail="Forbidden")
     if body.role not in ["admin", "user"]:
-        raise HTTPException(status_code=400, detail="Invalid role. Must be 'admin' or 'user'.")
-        
+        raise HTTPException(
+            status_code=400, detail="Invalid role. Must be 'admin' or 'user'.")
+
     try:
         with get_connection() as conn:
             with conn.cursor() as cur:
-                cur.execute("UPDATE users SET role = %s WHERE id = %s RETURNING id;", (body.role, user_id))
+                cur.execute(
+                    "UPDATE users SET role = %s WHERE id = %s RETURNING id;", (body.role, user_id))
                 if not cur.fetchone():
-                    raise HTTPException(status_code=404, detail="User not found")
+                    raise HTTPException(
+                        status_code=404, detail="User not found")
             conn.commit()
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Failed to update user role: {e}")
         raise HTTPException(status_code=500, detail="Database error")
-        
+
     log_audit_event(
         project_id=None,
         user_id=current_user.user_id,
@@ -1333,22 +1428,25 @@ def list_global_audit_logs(request: Request, limit: int = Query(50, le=200), cur
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
+
 def _get_project_or_404(project_id: str, current_user: User) -> dict:
     try:
         with get_connection() as conn:
             with conn.cursor(cursor_factory=DictCursor) as cur:
-                cur.execute("SELECT * FROM projects WHERE id = %s;", (project_id,))
+                cur.execute(
+                    "SELECT * FROM projects WHERE id = %s;", (project_id,))
                 row = cur.fetchone()
     except Exception as e:
         logger.error(f"DB error fetching project {project_id}: {e}")
         raise HTTPException(status_code=500, detail="Database error")
 
     if not row:
-        raise HTTPException(status_code=404, detail=f"Project '{project_id}' not found")
-        
+        raise HTTPException(
+            status_code=404, detail=f"Project '{project_id}' not found")
+
     if not current_user.is_admin and row["owner_id"] != current_user.user_id:
         raise HTTPException(status_code=403, detail="Forbidden")
-        
+
     return dict(row)
 
 
@@ -1366,7 +1464,8 @@ def _get_deployment_or_404(project_id: str, deployment_id: str) -> dict:
         raise HTTPException(status_code=500, detail="Database error")
 
     if not row:
-        raise HTTPException(status_code=404, detail=f"Deployment '{deployment_id}' not found")
+        raise HTTPException(
+            status_code=404, detail=f"Deployment '{deployment_id}' not found")
     return dict(row)
 
 

@@ -29,7 +29,8 @@ class StateMachine:
 
     def _get_redis(self):
         if self._redis is None:
-            self._redis = redis.Redis(host=config.REDIS_HOST, port=config.REDIS_PORT)
+            self._redis = redis.Redis(
+                host=config.REDIS_HOST, port=config.REDIS_PORT)
         return self._redis
 
     def _get_conn(self):
@@ -73,21 +74,26 @@ class StateMachine:
                         WHERE deployment_id = %s;
                     """, (new_state, datetime.now(timezone.utc), error_msg, deployment_id))
                     if cur.rowcount == 0:
-                        logger.warning(f"Deployment {deployment_id} not found in DB when transitioning to {new_state}")
-                
+                        logger.warning(
+                            f"Deployment {deployment_id} not found in DB when transitioning to {new_state}")
+
                 # Publish state update to Redis
                 try:
-                    payload = json.dumps({"state": new_state, "last_error": error_msg})
-                    self._get_redis().publish(f"shipzen:status:{deployment_id}", payload)
+                    payload = json.dumps(
+                        {"state": new_state, "last_error": error_msg})
+                    self._get_redis().publish(
+                        f"shipzen:status:{deployment_id}", payload)
                 except Exception as e:
                     logger.warning(f"Failed to publish status to Redis: {e}")
 
                 # Fix #24: was print(), now uses structured logger
-                logger.info(f"Deployment {deployment_id} transition -> {new_state}")
+                logger.info(
+                    f"Deployment {deployment_id} transition -> {new_state}")
                 break
             except psycopg2.OperationalError as e:
                 if attempt == 0:
-                    logger.warning(f"DB connection dropped during update_state, retrying: {e}")
+                    logger.warning(
+                        f"DB connection dropped during update_state, retrying: {e}")
                     if self._conn:
                         try:
                             self._conn.close()
@@ -102,12 +108,14 @@ class StateMachine:
             try:
                 conn = self._get_conn()
                 with conn.cursor(cursor_factory=DictCursor) as cur:
-                    cur.execute("SELECT * FROM deployments WHERE deployment_id = %s;", (deployment_id,))
+                    cur.execute(
+                        "SELECT * FROM deployments WHERE deployment_id = %s;", (deployment_id,))
                     row = cur.fetchone()
                     return dict(row) if row else None
             except psycopg2.OperationalError as e:
                 if attempt == 0:
-                    logger.warning(f"DB connection dropped during get_deployment, retrying: {e}")
+                    logger.warning(
+                        f"DB connection dropped during get_deployment, retrying: {e}")
                     if self._conn:
                         try:
                             self._conn.close()

@@ -13,7 +13,7 @@ const NAV = [
   { href: "/observability",    label: "Platform Health", icon: Activity },
 ];
 
-export function Sidebar({ user }: { user?: any }) {
+export function Sidebar({ user }: { user?: Record<string, unknown> }) {
   const pathname = usePathname();
 
   return (
@@ -70,7 +70,10 @@ export function Sidebar({ user }: { user?: any }) {
         {user ? (
           <div className="flex items-center gap-2.5 px-3 py-2">
             {user.image ? (
-              <img src={user.image} alt="Avatar" className="w-8 h-8 rounded-full shadow-sm border border-sidebar-border" />
+              <>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={user.image as string} alt="Avatar" className="w-8 h-8 rounded-full shadow-sm border border-sidebar-border" />
+              </>
             ) : (
               <div className="w-8 h-8 rounded-full bg-brand/20 flex items-center justify-center">
                 <span className="text-xs font-bold text-brand">{user.name?.charAt(0) || user.email?.charAt(0) || "U"}</span>

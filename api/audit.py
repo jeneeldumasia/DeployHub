@@ -34,12 +34,15 @@ def log_audit_event(
                         (project_id, user_id, action, resource_type, resource_id, details)
                     VALUES (%s, %s, %s, %s, %s, %s)
                     """,
-                    (project_id, user_id, action, resource_type, resource_id, json.dumps(details)),
+                    (project_id, user_id, action, resource_type,
+                     resource_id, json.dumps(details)),
                 )
-        logger.info(f"Audit event logged: {action} on {resource_type} {resource_id} by {user_id}")
+        logger.info(
+            f"Audit event logged: {action} on {resource_type} {resource_id} by {user_id}")
     except Exception as e:
         # Log and swallow — never let audit logging break the caller
-        logger.error(f"Failed to write audit event ({action} / {resource_id}): {e}")
+        logger.error(
+            f"Failed to write audit event ({action} / {resource_id}): {e}")
 
 
 def get_audit_logs(project_id: str = None, user_id: str = None, limit: int = 50):

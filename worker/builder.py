@@ -1,34 +1,35 @@
+from abc import ABC, abstractmethod
+from typing import Dict, Any
 import os
 import json
 import base64
 import boto3
 import logging
 
+
 def get_ecr_credentials():
     try:
         ecr = boto3.client('ecr', region_name='us-east-1')
-        token_resp = ecr.get_authorization_token()['authorizationData'][0]['authorizationToken']
+        token_resp = ecr.get_authorization_token(
+        )['authorizationData'][0]['authorizationToken']
         ecr_token = base64.b64decode(token_resp).decode('utf-8').split(':')[1]
         return token_resp, ecr_token
     except Exception as e:
         print(f"Warning: Failed to fetch ECR token: {e}")
         return "", ""
 
-from abc import ABC, abstractmethod
-from typing import Dict, Any
 
 logger = logging.getLogger('builder')
+
 
 class Builder(ABC):
     @abstractmethod
     def detect(self, workspace_path: str) -> bool:
         """Return True if this builder can handle the repository."""
-        pass
 
     @abstractmethod
     def generate_job_manifest(self, deployment_id: str, repo_url: str, branch: str, image_uri: str, overrides: dict) -> Dict[str, Any]:
         """Generate the Kubernetes Job manifest dictionary."""
-        pass
 
 
 class DockerfileBuilder(Builder):
@@ -81,7 +82,8 @@ class DockerfileBuilder(Builder):
                     "spec": {
                         "restartPolicy": "Never",
                         "tolerations": [
-                            {"key": "shipzen.jeneeldumasia.codes/dedicated", "operator": "Equal", "value": "builder", "effect": "NoSchedule"}
+                            {"key": "shipzen.jeneeldumasia.codes/dedicated",
+                                "operator": "Equal", "value": "builder", "effect": "NoSchedule"}
                         ],
                         "initContainers": [
                             {
@@ -123,6 +125,7 @@ class DockerfileBuilder(Builder):
             }
         }
 
+
 class RailpackBuilder(Builder):
     def detect(self, workspace_path: str) -> bool:
         # Tier 3 fallback
@@ -142,7 +145,7 @@ class BuildpackBuilder(Builder):
     def generate_job_manifest(self, deployment_id: str, repo_url: str, branch: str, image_uri: str, overrides: dict) -> Dict[str, Any]:
         token_resp, ecr_token = get_ecr_credentials()
         registry = image_uri.split('/')[0] if '/' in image_uri else ''
-        
+
         # Build the script for initContainer that clones and applies the SPA hack if needed
         # Overrides contains instructions if we need to inject server.js
         setup_script = f"""
@@ -204,9 +207,11 @@ fi
 
         env_vars = []
         if overrides.get("bp_node_run_scripts"):
-            env_vars.append({"name": "BP_NODE_RUN_SCRIPTS", "value": overrides.get("bp_node_run_scripts")})
-            
-        pack_args = ["pack", "build", image_uri, "--path", "/workspace", "--builder", "paketobuildpacks/builder-jammy-base", "--publish", "--env", "NODE_OPTIONS=--max-old-space-size=2048"]
+            env_vars.append({"name": "BP_NODE_RUN_SCRIPTS",
+                            "value": overrides.get("bp_node_run_scripts")})
+
+        pack_args = ["pack", "build", image_uri, "--path", "/workspace", "--builder",
+                     "paketobuildpacks/builder-jammy-base", "--publish", "--env", "NODE_OPTIONS=--max-old-space-size=2048"]
         if overrides.get("runtime"):
             pack_args.extend(["--buildpack", overrides.get("runtime")])
 
@@ -229,7 +234,8 @@ fi
                         "restartPolicy": "Never",
 
                         "tolerations": [
-                            {"key": "shipzen.jeneeldumasia.codes/dedicated", "operator": "Equal", "value": "builder", "effect": "NoSchedule"}
+                            {"key": "shipzen.jeneeldumasia.codes/dedicated",
+                                "operator": "Equal", "value": "builder", "effect": "NoSchedule"}
                         ],
                         "initContainers": [
                             {
