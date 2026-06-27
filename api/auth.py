@@ -23,6 +23,10 @@ class User:
     user_id: str
     role: str = 'user'
 
+    @property
+    def is_admin(self) -> bool:
+        return self.role == 'admin'
+
 def get_current_user_from_token(token: str) -> User:
     return get_current_user(HTTPAuthorizationCredentials(scheme="Bearer", credentials=token))
 

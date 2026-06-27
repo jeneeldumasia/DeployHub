@@ -27,6 +27,14 @@ CREATE INDEX IF NOT EXISTS idx_projects_owner_id ON projects(owner_id);
 CREATE INDEX IF NOT EXISTS idx_projects_status ON projects(status);
 CREATE INDEX IF NOT EXISTS idx_projects_created_at ON projects(created_at DESC);
 
+-- Project Members Table (RBAC)
+CREATE TABLE IF NOT EXISTS project_members (
+    project_id VARCHAR(255) NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    user_id VARCHAR(255) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    role VARCHAR(50) NOT NULL DEFAULT 'viewer',
+    PRIMARY KEY (project_id, user_id)
+);
+
 -- Deployments Table
 CREATE TABLE IF NOT EXISTS deployments (
     deployment_id VARCHAR(255) PRIMARY KEY,
