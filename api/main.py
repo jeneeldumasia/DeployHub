@@ -89,12 +89,7 @@ def _user_id_or_ip(request: Request) -> str:
     if auth_header and auth_header.startswith("Bearer "):
         try:
             token = auth_header.split(" ")[1]
-            import jwt
-            # For rate limiting, it's cheaper to just decode without full validation
-            payload = jwt.decode(token, options={"verify_signature": False})
-            if "sub" in payload:
-                # Fix 5: Hash token instead of unverified JWT decode for rate limit key
-                return hashlib.sha256(token.encode()).hexdigest()[:32]
+            return hashlib.sha256(token.encode()).hexdigest()[:32]
         except Exception:
             pass
     return get_remote_address(request)

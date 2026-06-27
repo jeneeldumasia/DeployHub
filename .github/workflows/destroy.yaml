@@ -9,6 +9,9 @@ permissions:
 jobs:
   terraform-destroy:
     runs-on: ubuntu-latest
+    env:
+      AWS_REGION: ''
+      cluster_not_found: 'false'
     steps:
       - name: Checkout code
         uses: actions/checkout@v4

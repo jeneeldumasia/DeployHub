@@ -9,6 +9,8 @@ permissions:
 jobs:
   debug:
     runs-on: ubuntu-latest
+    env:
+      AWS_REGION: ''
     steps:
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
