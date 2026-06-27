@@ -126,6 +126,16 @@ resource "helm_release" "kube_prometheus_stack" {
   }
 
   set {
+    name  = "grafana.sidecar.dashboards.defaultFolderName"
+    value = "Infrastructure (Advanced)"
+  }
+
+  set {
+    name  = "grafana.sidecar.dashboards.folderAnnotation"
+    value = "grafana_folder"
+  }
+
+  set {
     name  = "grafana.sidecar.dashboards.searchNamespace"
     value = "ALL"
   }

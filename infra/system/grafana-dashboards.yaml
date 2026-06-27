@@ -3,6 +3,8 @@ kind: ConfigMap
 metadata:
   name: grafana-dashboards
   namespace: observability
+  annotations:
+    grafana_folder: "ShipZen"
   labels:
     grafana_dashboard: "1"
 data:
@@ -323,7 +325,7 @@ data:
       "panels": [
         {"title": "Pod Ready Status", "type": "stat", "gridPos": {"h": 6, "w": 6, "x": 0, "y": 0}, "targets": [{"expr": "kube_pod_status_ready{namespace=\"$namespace\", pod=~\"$deployment-.*\", condition=\"true\"}"}]},
         {"title": "Restart Count", "type": "timeseries", "gridPos": {"h": 6, "w": 18, "x": 6, "y": 0}, "targets": [{"expr": "kube_pod_container_status_restarts_total{namespace=\"$namespace\", pod=~\"$deployment-.*\"}"}]},
-        {"title": "CPU Usage", "type": "timeseries", "gridPos": {"h": 9, "w": 12, "x": 0, "y": 6}, "targets": [{"expr": "sum(rate(container_cpu_usage_seconds_total{namespace=\"$namespace\", pod=~\"$deployment-.*\"}[5m])) by (pod)"}], "fieldConfig": {"defaults": {"unit": "cores"}}},
-        {"title": "Memory Usage", "type": "timeseries", "gridPos": {"h": 9, "w": 12, "x": 12, "y": 6}, "targets": [{"expr": "sum(container_memory_working_set_bytes{namespace=\"$namespace\", pod=~\"$deployment-.*\"}) by (pod)"}], "fieldConfig": {"defaults": {"unit": "bytes"}}}
+        {"title": "CPU Usage %", "type": "timeseries", "gridPos": {"h": 9, "w": 12, "x": 0, "y": 6}, "targets": [{"expr": "sum(rate(container_cpu_usage_seconds_total{namespace=\"$namespace\", pod=~\"$deployment-.*\"}[5m])) by (pod) / sum(kube_pod_container_resource_limits{namespace=\"$namespace\", pod=~\"$deployment-.*\", resource=\"cpu\"}) by (pod)"}], "fieldConfig": {"defaults": {"unit": "percentunit"}}},
+        {"title": "Memory Usage %", "type": "timeseries", "gridPos": {"h": 9, "w": 12, "x": 12, "y": 6}, "targets": [{"expr": "sum(container_memory_working_set_bytes{namespace=\"$namespace\", pod=~\"$deployment-.*\"}) by (pod) / sum(kube_pod_container_resource_limits{namespace=\"$namespace\", pod=~\"$deployment-.*\", resource=\"memory\"}) by (pod)"}], "fieldConfig": {"defaults": {"unit": "percentunit"}}}
       ]
     }
