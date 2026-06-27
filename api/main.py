@@ -710,7 +710,14 @@ async def websocket_deployment_logs(
     try:
         import asyncio
         def verify():
-            _get_project_or_404(project_id, user)
+            from database import get_connection
+            with get_connection() as conn:
+                with conn.cursor() as cur:
+                    # Quick auth and membership check
+                    if user.role != 'admin':
+                        cur.execute("SELECT 1 FROM project_members WHERE project_id = %s AND user_id = %s;", (project_id, user.user_id))
+                        if not cur.fetchone():
+                            raise HTTPException(status_code=403, detail="Forbidden")
             _get_deployment_or_404(project_id, deployment_id)
         await asyncio.to_thread(verify)
     except HTTPException:
@@ -935,8 +942,7 @@ def put_env_var(request: Request, project_id: str, body: dict, project: dict = D
 
 @app.delete("/projects/{project_id}/env/{key}", tags=["Environment"])
 @limiter.limit("20/minute")
-def delete_env_var(request: Request, project_id: str, key: str, current_user: User = Depends(get_current_user)):
-    project = _get_project_or_404(project_id, current_user)
+def delete_env_var(request: Request, project_id: str, key: str, project: dict = Depends(verify_project_access), current_user: User = Depends(get_current_user)):
     # Fix 6: Use project['id'] instead of name to avoid collision
     secret_id = f"shipzen/project/{project['id']}"
     sm = boto3.client('secretsmanager')
