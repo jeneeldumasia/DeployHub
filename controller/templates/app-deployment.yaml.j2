@@ -54,6 +54,8 @@ spec:
       # `aws ecr get-login-password` and creates the secret).
       securityContext:
         runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
         seccompProfile:
           type: RuntimeDefault
       imagePullSecrets:

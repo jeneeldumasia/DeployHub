@@ -117,14 +117,27 @@ def apply_manifests(manifest_str: str):
     for doc in docs:
         if doc is None:
             continue
+            
+        kind = doc.get("kind")
+        name = doc.get("metadata", {}).get("name")
+        namespace = doc.get("metadata", {}).get("namespace", "default")
+        
         try:
+            if kind == "HTTPRoute":
+                k8s_custom_api.create_namespaced_custom_object(
+                    "gateway.networking.k8s.io", "v1", namespace, "httproutes", doc)
+                logger.info(f"Applied: {kind} / {name}")
+                continue
+            elif kind == "ExternalSecret":
+                k8s_custom_api.create_namespaced_custom_object(
+                    "external-secrets.io", "v1beta1", namespace, "externalsecrets", doc)
+                logger.info(f"Applied: {kind} / {name}")
+                continue
+
             create_from_yaml(k8s_client, yaml_objects=[doc], verbose=False)
-            logger.info(f"Applied: {doc.get('kind', 'unknown')} / {doc.get('metadata', {}).get('name', 'unknown')}")
+            logger.info(f"Applied: {kind} / {name}")
         except ApiException as e:
             if e.status == 409:
-                kind = doc.get("kind")
-                name = doc.get("metadata", {}).get("name")
-                namespace = doc.get("metadata", {}).get("namespace", "default")
                 try:
                     if kind == "Deployment":
                         k8s_apps_api.patch_namespaced_deployment(name, namespace, doc)
@@ -135,7 +148,7 @@ def apply_manifests(manifest_str: str):
                             "gateway.networking.k8s.io", "v1", namespace, "httproutes", name, doc)
                     elif kind == "ExternalSecret":
                         k8s_custom_api.patch_namespaced_custom_object(
-                            "external-secrets.io", "v1", namespace, "externalsecrets", name, doc)
+                            "external-secrets.io", "v1beta1", namespace, "externalsecrets", name, doc)
                     elif kind == "PodDisruptionBudget":
                         client.PolicyV1Api().patch_namespaced_pod_disruption_budget(name, namespace, doc)
                     elif kind == "NetworkPolicy":
@@ -155,11 +168,9 @@ def apply_manifests(manifest_str: str):
                 except Exception as patch_e:
                     logger.error(f"Failed to patch {kind} {name}: {patch_e}")
             else:
-                logger.warning(f"apply_manifests API error for {doc.get('kind')}: {e}")
+                logger.warning(f"apply_manifests API error for {kind}: {e}")
         except Exception as e:
-            if hasattr(e, "status") and e.status == 409:
-                logger.warning(f"Caught 409 inside generic exception for {doc.get('kind')}: {e}")
-            logger.warning(f"apply_manifests error for {doc.get('kind')}: {e}")
+            logger.warning(f"apply_manifests error for {kind}: {e}")
 
 
 def check_namespace_exists(namespace: str) -> bool:
