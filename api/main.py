@@ -243,6 +243,14 @@ def delete_project(request: Request, project_id: str, project: dict = Depends(ve
     The controller will delete the Kubernetes namespace and then
     hard-delete the row once the namespace is gone.
     """
+    if current_user.role != 'admin':
+        with get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT role FROM project_members WHERE project_id = %s AND user_id = %s;", (project_id, current_user.user_id))
+                member = cur.fetchone()
+                if not member or member[0] != 'owner':
+                    raise HTTPException(status_code=403, detail="Only project owners can delete projects")
+
     try:
         with get_connection() as conn:
             with conn.cursor() as cur:
@@ -708,18 +716,9 @@ async def websocket_deployment_logs(
 
     # Verify the deployment belongs to this project
     try:
+        await verify_project_access(project_id, user)
         import asyncio
-        def verify():
-            from database import get_connection
-            with get_connection() as conn:
-                with conn.cursor() as cur:
-                    # Quick auth and membership check
-                    if user.role != 'admin':
-                        cur.execute("SELECT 1 FROM project_members WHERE project_id = %s AND user_id = %s;", (project_id, user.user_id))
-                        if not cur.fetchone():
-                            raise HTTPException(status_code=403, detail="Forbidden")
-            _get_deployment_or_404(project_id, deployment_id)
-        await asyncio.to_thread(verify)
+        await asyncio.to_thread(_get_deployment_or_404, project_id, deployment_id)
     except HTTPException:
         await websocket.close(code=1008)
         return
